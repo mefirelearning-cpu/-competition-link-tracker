@@ -421,6 +421,7 @@ async function apiStats(res, comp) {
     competition: {id:comp.id,name:comp.name,status:comp.status},
     totals: {
       participants: participants.length,
+      points: participants.reduce((s,r)=>s+r.points,0),
       clicks: participants.reduce((s,r)=>s+r.clicks,0),
       unique: participants.reduce((s,r)=>s+r.unique,0)
     },
@@ -548,6 +549,23 @@ export default async function handler(req, res) {
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
+      if (action === "points" && req.method === "POST") {
+        const b = parseBody(req);
+        const code = String(b.code || "").trim();
+        const amount = Number.parseInt(String(b.amount || ""), 10);
+        const reason = String(b.reason || "").trim().slice(0, 80);
+        if (!code || !Number.isInteger(amount) || amount === 0 || amount < -10000 || amount > 10000) {
+          return send(res, 400, "Valeur de points invalide", "text/plain; charset=utf-8");
+        }
+        const participants = await getParticipants(id);
+        if (!participants.some(p => p.code === code)) {
+          return send(res, 404, "Participant introuvable", "text/plain; charset=utf-8");
+        }
+        await redis(["HINCRBY", statsKey(id, code), "points", amount]);
+        await redis(["HSET", statsKey(id, code), "lastReason", reason || "Ajustement manuel", "updatedAt", new Date().toISOString()]);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
+      }
+
       if (action === "status" && req.method === "POST") {
         const b = parseBody(req);
         const status = String(b.status || "");
@@ -583,8 +601,8 @@ export default async function handler(req, res) {
       if (action === "export.csv" && req.method === "GET") {
         const rows = await getRankedParticipants(comp);
         const csv = [
-          ["Rang","Participant","Code","Clics","Visiteurs uniques","Lien"],
-          ...rows.map(r=>[r.rank,r.name,r.code,r.clicks,r.unique,origin+r.link])
+          ["Rang","Participant","Code","Points","Clics","Visiteurs uniques","Lien"],
+          ...rows.map(r=>[r.rank,r.name,r.code,r.points,r.clicks,r.unique,origin+r.link])
         ].map(row=>row.map(v=>"\"" + String(v).replace(/"/g,'""') + "\"").join(",")).join("\n");
         res.setHeader("Content-Disposition","attachment; filename=\"" + slugify(comp.name) + "-classement.csv\"");
         return send(res,200,csv,"text/csv; charset=utf-8");
