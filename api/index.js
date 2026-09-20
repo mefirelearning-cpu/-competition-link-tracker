@@ -295,21 +295,128 @@ function leaderboardRowsHtml(rows, origin, comp, publicMode) {
     const link = origin + r.link;
     const rate = r.clicks ? Math.round((r.unique / r.clicks) * 100) : 0;
     if (publicMode) {
-    const publicHeader =
-      "<div class=\"public-header\"><div class=\"public-brand\">" + profileAvatarHtml(profile, comp.name, "hero-avatar") +
-        "<div><div class=\"eyebrow\">CLASSEMENT PUBLIC · LIVE</div><h1>" + esc(comp.name) + "</h1><p>Classement principal basé sur les points attribués.</p></div></div>" +
-        "<div class=\"public-prize\"><span class=\"status\" style=\"background:#ffffff12;color:#fff;border-color:#ffffff20\"><span class=\"dot active\"></span>" + esc(comp.status) + "</span>" +
-        (comp.prize ? "<b style=\"margin-top:8px\">Récompense : " + esc(comp.prize) + "</b>" : "") + "</div></div>";
-    const publicKpis =
-      "<div class=\"public-kpis\"><div class=\"public-kpi\"><span>Participants</span><b id=\"statParticipants\">" + totals.participants + "</b></div>" +
-      "<div class=\"public-kpi\"><span>Points</span><b id=\"statPoints\">" + totals.points + "</b></div>" +
-      "<div class=\"public-kpi\"><span>Clics</span><b id=\"statClicks\">" + totals.clicks + "</b></div>" +
-      "<div class=\"public-kpi\"><span>Uniques</span><b id=\"statUnique\">" + totals.unique + "</b></div></div>";
-    content = publicHeader + publicKpis +
-      "<div class=\"public-board\"><div class=\"public-panel\"><div class=\"section-title\"><div><h2>Classement général</h2><div class=\"subnav-note\">Du premier au dernier · priorité aux points</div></div><div class=\"live\"><span class=\"pulse\"></span><span id=\"updatedAt\">live</span></div></div>" +
-        "<div class=\"table-wrap\"><table class=\"public-table\"><thead><tr><th>#</th><th>Participant</th><th>Points</th><th>Clics</th><th>Uniques</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, true) + "</tbody></table></div>" +
-        "<div class=\"capture-note\">Les points sont attribués manuellement par l’administrateur selon les actions validées (ex. souscription).</div></div>" +
-      "<div class=\"public-side\"><div class=\"public-panel\"><h3>Podium</h3>" + podiumHtml(rows) + "</div><div class=\"public-panel\"><div class=\"section-title\"><h2>Écart de points</h2></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div></div></div>";
+      return "<tr data-code=\"" + esc(r.code) + "\">" +
+        "<td class=\"rank " + (r.rank === 1 ? "one" : "") + "\">" + r.rank + "</td>" +
+        "<td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
+        "<td class=\"points-col\">" + r.points + " pts</td><td>" + r.clicks + "</td><td><b>" + r.unique + "</b></td></tr>";
+    }
+    return "<tr data-code=\"" + esc(r.code) + "\">" +
+      "<td class=\"rank " + (r.rank === 1 ? "one" : "") + "\">" + r.rank + "</td>" +
+      "<td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
+      "<td class=\"points-col\">" + r.points + "</td><td>" + r.clicks + "</td><td><b>" + r.unique + "</b></td><td>" + rate + "%</td>" +
+      "<td><div class=\"actions\"><button type=\"button\" class=\"iconbtn copy\" data-link=\"" + esc(link) + "\">Copier</button><a class=\"iconbtn\" href=\"" + esc(link) + "\" target=\"_blank\">Ouvrir</a></div></td>" +
+      "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>";
+  }).join("");
+}
+
+function chartHtml(rows) {
+  const max = Math.max(1, ...rows.map(r => r.points));
+  return rows.map(r => {
+    const pct = Math.max(2, Math.round((r.points / max) * 100));
+    return "<div class=\"bar-row\" data-code=\"" + esc(r.code) + "\" title=\"" + esc(r.name) + " · " + r.points + " points\">" +
+      "<div class=\"bar-name\">" + esc(r.name) + "</div>" +
+      "<div class=\"track\"><div class=\"fill\" style=\"width:" + pct + "%\"></div></div>" +
+      "<div class=\"bar-value\">" + r.points + " pts</div></div>";
+  }).join("") || "<div class=\"empty\">Le graphique apparaîtra dès l’attribution des premiers points.</div>";
+}
+
+
+function profileAvatarHtml(profile, name, cls = "") {
+  const initial = esc(String(name || "C").trim().charAt(0).toUpperCase() || "C");
+  if (profile && /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(profile)) {
+    return "<img class=\"profile-img " + esc(cls) + "\" src=\"" + esc(profile) + "\" alt=\"Photo de la compétition\">";
+  }
+  return "<div class=\"profile-fallback " + esc(cls) + "\">" + initial + "</div>";
+}
+
+function competitionSidebar(comp, view, profile) {
+  const id = encodeURIComponent(comp.id);
+  const items = [
+    ["overview","Vue d’ensemble","/c/" + id],
+    ["links","Liens participants","/c/" + id + "/links"],
+    ["ranking","Classement","/c/" + id + "/ranking"],
+    ["live","Graphique live","/c/" + id + "/live"],
+    ["participants","Participants","/c/" + id + "/participants"],
+    ["settings","Paramètres","/c/" + id + "/settings"]
+  ];
+  return "<aside class=\"side\">" +
+    "<div class=\"side-profile\">" + profileAvatarHtml(profile, comp.name) +
+      "<div><div class=\"side-name\">" + esc(comp.name) + "</div><div class=\"side-meta\">" + esc(comp.status) + "</div></div></div>" +
+    "<nav class=\"side-nav\">" +
+      items.map(([key,label,href]) => "<a class=\"side-link " + (view === key ? "active" : "") + "\" href=\"" + href + "\"><span class=\"nav-dot\"></span>" + label + "</a>").join("") +
+    "</nav>" +
+    "<div class=\"side-public\"><a class=\"side-link\" target=\"_blank\" href=\"/leaderboard/" + id + "\"><span class=\"nav-dot\"></span>Classement public</a></div>" +
+  "</aside>";
+}
+
+function pageTitleHtml(title, subtitle, actions = "") {
+  return "<div class=\"page-title\"><div><h2>" + esc(title) + "</h2><p>" + esc(subtitle) + "</p></div>" +
+    (actions ? "<div class=\"page-actions\">" + actions + "</div>" : "") + "</div>";
+}
+
+function participantAdminRows(rows, comp) {
+  if (!rows.length) return "<tr><td colspan=\"7\" class=\"empty\">Aucun participant.</td></tr>";
+  return rows.map(r =>
+    "<tr><td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
+    "<td>#" + r.rank + "</td><td class=\"points-col\">" + r.points + "</td><td>" + r.clicks + "</td><td>" + r.unique + "</td>" +
+    "<td><button class=\"iconbtn copy\" type=\"button\" data-link=\"/r/" + esc(comp.id) + "/" + esc(r.code) + "\">Copier lien</button></td>" +
+    "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>"
+  ).join("");
+}
+
+function pointsCardsHtml(rows, comp) {
+  if (!rows.length) return "<div class=\"empty\">Ajoute d’abord des participants.</div>";
+  const id = encodeURIComponent(comp.id);
+  return "<div class=\"point-grid\">" + rows.map(r =>
+    "<article class=\"point-card\"><div class=\"point-head\"><div><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + " · rang #" + r.rank + "</div></div><div class=\"point-value\">" + r.points + " pts</div></div>" +
+    "<form method=\"post\" action=\"/api/competition/" + id + "/points\">" +
+      "<input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\">" +
+      "<div class=\"quick-points\"><button name=\"amount\" value=\"5\" type=\"submit\">+5</button><button name=\"amount\" value=\"10\" type=\"submit\">+10</button><button name=\"amount\" value=\"20\" type=\"submit\">+20</button><button name=\"amount\" value=\"50\" type=\"submit\">+50</button></div>" +
+      "<div class=\"point-custom\"><input name=\"amount\" type=\"number\" step=\"1\" min=\"-10000\" max=\"10000\" placeholder=\"± pts\"><input name=\"reason\" maxlength=\"80\" placeholder=\"Motif : abonnement, bonus…\"><button class=\"btn\" type=\"submit\">Valider</button></div>" +
+    "</form></article>"
+  ).join("") + "</div>";
+}
+
+async function competitionPage(origin, comp, view = "overview", publicMode = false, newCode = "") {
+  const rows = await getRankedParticipants(comp);
+  const profile = await getProfile(comp.id);
+  const totals = {
+    participants: rows.length,
+    clicks: rows.reduce((s,r) => s + r.clicks, 0),
+    unique: rows.reduce((s,r) => s + r.unique, 0)
+  };
+  const leader = rows[0];
+  const theme = ["blue","amber","red","mono"].includes(comp.theme) ? comp.theme : "blue";
+  const endpoint = "/api/competition/" + encodeURIComponent(comp.id) + "/stats";
+  const id = encodeURIComponent(comp.id);
+
+  const statsHtml =
+    "<div class=\"grid\" style=\"margin-bottom:14px\">" +
+      "<div class=\"card span3 stat\"><div class=\"label\">Participants</div><div class=\"num\" id=\"statParticipants\">" + totals.participants + "</div></div>" +
+      "<div class=\"card span3 stat\"><div class=\"label\">Clics</div><div class=\"num\" id=\"statClicks\">" + totals.clicks + "</div></div>" +
+      "<div class=\"card span3 stat\"><div class=\"label\">Uniques</div><div class=\"num\" id=\"statUnique\">" + totals.unique + "</div></div>" +
+      "<div class=\"card span3 stat\"><div class=\"label\">En tête</div><div class=\"num\" id=\"statLeader\" style=\"font-size:20px\">" + esc(leader ? leader.name : "—") + "</div></div>" +
+    "</div>";
+
+  const hero =
+    "<section class=\"hero\" data-ghost=\"LIVE\"><div class=\"hero-row\"><div style=\"display:flex;gap:16px;align-items:center;min-width:0\">" +
+      profileAvatarHtml(profile, comp.name, "hero-avatar") +
+      "<div style=\"min-width:0\"><div class=\"eyebrow\">" + (publicMode ? "Classement public" : "Gestion de compétition") + "</div><h1 style=\"margin-top:8px\">" + esc(comp.name) + "</h1><p>" +
+      (comp.prize ? "Récompense : " + esc(comp.prize) + ". " : "") +
+      "Suivi des performances et des positions en temps réel.</p></div></div>" +
+      "<div class=\"hero-side\"><div class=\"small\" style=\"color:#aaa\">Statut</div><strong>" + esc(comp.status) + "</strong><div class=\"small\" style=\"color:#aaa;margin-top:8px\">" + rows.length + " participants</div><div class=\"accent-chip\"><i></i>" + esc(theme) + "</div></div></div></section>";
+
+  const fresh = newCode ? rows.find(r => r.code === newCode) : null;
+  const success = fresh ?
+    "<div class=\"success\"><div><b>Participant ajouté : " + esc(fresh.name) + "</b><div class=\"small muted\">Son lien personnel est prêt à être envoyé.</div></div><div class=\"link-actions\"><button class=\"btn2 copy\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\">Copier maintenant</button><button class=\"btn2 share\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\" data-name=\"" + esc(fresh.name) + "\">Partager</button></div></div>" : "";
+
+  let content = "";
+
+  if (publicMode) {
+    content = hero + statsHtml +
+      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Podium actuel</h2><div class=\"subnav-note\">Les trois premières positions.</div></div></div>" + podiumHtml(rows) + "</div>" +
+      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><h2>Classement</h2><div class=\"live\"><span class=\"pulse\"></span>mise à jour toutes les 5 s</div></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, true) + "</tbody></table></div></div>" +
+      "<div class=\"card\"><div class=\"section-title\"><h2>Position en temps réel</h2><span id=\"updatedAt\" class=\"small muted\"></span></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>";
   } else if (view === "overview") {
     const quick =
       "<div class=\"quick-actions\">" +
@@ -330,20 +437,19 @@ function leaderboardRowsHtml(rows, origin, comp, publicMode) {
   } else if (view === "ranking") {
     content = pageTitleHtml("Classement","Classement complet, du premier au dernier.", "<a class=\"btn2\" target=\"_blank\" href=\"/leaderboard/" + id + "\">Ouvrir la page publique</a>") +
       "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><h2>Podium actuel</h2><div class=\"live\"><span class=\"pulse\"></span>live</div></div>" + podiumHtml(rows) + "</div>" +
-      "<div class=\"card\"><div class=\"section-title\"><h2>Classement détaillé</h2><span class=\"small muted\">priorité aux points · puis uniques et clics pour départager</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Points</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th><th>Action</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, false) + "</tbody></table></div></div>";
+      "<div class=\"card\"><div class=\"section-title\"><h2>Classement détaillé</h2><span class=\"small muted\">score basé sur les visiteurs uniques</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th><th>Action</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, false) + "</tbody></table></div></div>";
   } else if (view === "live") {
     content = pageTitleHtml("Graphique live","Visualise la position actuelle de tous les participants.") +
       statsHtml +
       "<div class=\"card\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>";
   } else if (view === "participants") {
-    content = pageTitleHtml("Participants","Ajoute les participants et attribue leurs points après validation d’une action ou d’une souscription.") +
+    content = pageTitleHtml("Participants","Ajoute les participants individuellement ou en masse.") +
       success +
       "<div class=\"grid\" style=\"margin-bottom:14px\">" +
         "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajouter un participant</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/add\"><div class=\"form-grid\"><div><label>Nom</label><input name=\"name\" placeholder=\"Nom du participant\" required></div><div><label>Code (facultatif)</label><input name=\"code\" placeholder=\"Généré automatiquement\"></div><div class=\"full\"><button class=\"btn\" style=\"width:100%\" type=\"submit\">Ajouter le participant</button></div></div></form></div>" +
         "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajout multiple</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/bulk\"><label>Un nom par ligne</label><textarea name=\"names\" placeholder=\"Aron&#10;Tony&#10;Marc&#10;Sarah\"></textarea><button class=\"btn2\" style=\"width:100%;margin-top:9px\" type=\"submit\">Ajouter toute la liste</button></form></div>" +
       "</div>" +
-      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Attribuer des points</h2><div class=\"subnav-note\">Utilise +5, +10, +20, +50 ou saisis une valeur personnalisée. Une valeur négative permet de corriger une erreur.</div></div></div>" + pointsCardsHtml(rows, comp) + "</div>" +
-      "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + rows.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Points</th><th>Clics</th><th>Uniques</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(rows, comp) + "</tbody></table></div></div>";
+      "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + rows.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Clics</th><th>Uniques</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(rows, comp) + "</tbody></table></div></div>";
   } else if (view === "settings") {
     const currentProfile = profileAvatarHtml(profile, comp.name);
     content = pageTitleHtml("Paramètres","Identité, photo, palette et statut de cette compétition.") +
@@ -360,7 +466,7 @@ function leaderboardRowsHtml(rows, origin, comp, publicMode) {
   }
 
   const body = publicMode
-    ? "<div class=\"theme theme-" + theme + " public-shell\"><div class=\"view-fade\">" + content + "</div></div>"
+    ? "<div class=\"theme theme-" + theme + "\">" + topNav() + "<div class=\"view-fade\">" + content + "</div></div>"
     : "<div class=\"theme theme-" + theme + "\">" + topNav() + "<div class=\"app-shell\">" + competitionSidebar(comp, view, profile) + "<main class=\"app-main view-fade\">" + content + "</main></div></div>";
 
   const script =
@@ -368,9 +474,9 @@ function leaderboardRowsHtml(rows, origin, comp, publicMode) {
     "document.addEventListener('click',async e=>{const copy=e.target.closest('.copy');if(copy){let v=copy.dataset.link||'';if(v.startsWith('/'))v=origin+v;try{await navigator.clipboard.writeText(v);const old=copy.textContent;copy.textContent='Copié ✓';setTimeout(()=>copy.textContent=old,1200)}catch{prompt('Copie ce lien :',v)}return}const share=e.target.closest('.share');if(share){let v=share.dataset.link||'';if(v.startsWith('/'))v=origin+v;const name=share.dataset.name||'participant';if(navigator.share){try{await navigator.share({title:'Lien de '+name,text:'Voici ton lien personnel pour la compétition :',url:v})}catch{}}else{try{await navigator.clipboard.writeText(v);alert('Lien copié')}catch{prompt('Copie ce lien :',v)}}}});" +
     "const search=document.getElementById('participantSearch');if(search){search.addEventListener('input',()=>{const q=search.value.toLowerCase().trim();document.querySelectorAll('.participant-link-card').forEach(x=>x.style.display=x.dataset.search.includes(q)?'':'none')})}" +
     "function el(t,c,txt){const x=document.createElement(t);if(c)x.className=c;if(txt!==undefined)x.textContent=txt;return x}" +
-    "function render(data){const rows=data.participants||[];const a=document.getElementById('statParticipants'),p=document.getElementById('statPoints'),b=document.getElementById('statClicks'),u=document.getElementById('statUnique'),l=document.getElementById('statLeader');if(a)a.textContent=rows.length;if(p)p.textContent=data.totals.points||0;if(b)b.textContent=data.totals.clicks;if(u)u.textContent=data.totals.unique;if(l)l.textContent=rows[0]?rows[0].name:'—';" +
-      "const body=document.getElementById('leaderboardBody');if(body){body.textContent='';rows.forEach(r=>{const tr=document.createElement('tr');tr.appendChild(el('td','rank'+(r.rank===1?' one':''),String(r.rank)));const tdP=el('td');tdP.append(el('div','person',r.name),el('div','code',r.code));tr.appendChild(tdP);tr.appendChild(el('td','points-col',String(r.points)+' pts'));tr.appendChild(el('td','',String(r.clicks)));const tdU=el('td');tdU.appendChild(el('b','',String(r.unique)));tr.appendChild(tdU);if(!publicMode){tr.appendChild(el('td','',r.clicks?Math.round(r.unique/r.clicks*100)+'%':'0%'));const tdL=el('td');const ac=el('div','actions');const cp=el('button','iconbtn copy','Copier');cp.type='button';cp.dataset.link=origin+r.link;const op=el('a','iconbtn','Ouvrir');op.href=origin+r.link;op.target='_blank';ac.append(cp,op);tdL.appendChild(ac);tr.appendChild(tdL);const td=el('td');const fm=document.createElement('form');fm.method='post';fm.action='/api/competition/'+encodeURIComponent(data.competition.id)+'/delete-participant';const input=document.createElement('input');input.type='hidden';input.name='code';input.value=r.code;const bt=el('button','danger','Supprimer');bt.type='submit';fm.append(input,bt);td.appendChild(fm);tr.appendChild(td)}body.appendChild(tr)})}" +
-      "const chart=document.getElementById('liveChart');if(chart){chart.textContent='';const max=Math.max(1,...rows.map(r=>r.points||0));if(!rows.length){chart.appendChild(el('div','empty','Le graphique apparaîtra dès l’attribution des premiers points.'))}else rows.forEach(r=>{const row=el('div','bar-row');row.appendChild(el('div','bar-name',r.name));const track=el('div','track');const fill=el('div','fill');fill.style.width=Math.max(2,Math.round((r.points||0)/max*100))+'%';track.appendChild(fill);row.append(track,el('div','bar-value',String(r.points||0)+' pts'));chart.appendChild(row)})}const t=document.getElementById('updatedAt');if(t)t.textContent='· '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});}" +
+    "function render(data){const rows=data.participants||[];const a=document.getElementById('statParticipants'),b=document.getElementById('statClicks'),u=document.getElementById('statUnique'),l=document.getElementById('statLeader');if(a)a.textContent=rows.length;if(b)b.textContent=data.totals.clicks;if(u)u.textContent=data.totals.unique;if(l)l.textContent=rows[0]?rows[0].name:'—';" +
+      "const body=document.getElementById('leaderboardBody');if(body){body.textContent='';rows.forEach(r=>{const tr=document.createElement('tr');const tdRank=el('td','rank'+(r.rank===1?' one':''),String(r.rank));tr.appendChild(tdRank);const tdP=el('td');tdP.append(el('div','person',r.name),el('div','code',r.code));tr.appendChild(tdP);tr.appendChild(el('td','',String(r.clicks)));const tdU=el('td');tdU.appendChild(el('b','',String(r.unique)));tr.appendChild(tdU);tr.appendChild(el('td','',r.clicks?Math.round(r.unique/r.clicks*100)+'%':'0%'));const tdL=el('td');const ac=el('div','actions');const cp=el('button','iconbtn copy','Copier');cp.type='button';cp.dataset.link=origin+r.link;const op=el('a','iconbtn','Ouvrir');op.href=origin+r.link;op.target='_blank';ac.append(cp,op);tdL.appendChild(ac);tr.appendChild(tdL);if(!publicMode){const td=el('td');const f=document.createElement('form');f.method='post';f.action='/api/competition/'+encodeURIComponent(data.competition.id)+'/delete-participant';const i=document.createElement('input');i.type='hidden';i.name='code';i.value=r.code;const bt=el('button','danger','Supprimer');bt.type='submit';f.append(i,bt);td.appendChild(f);tr.appendChild(td)}body.appendChild(tr)})}" +
+      "const chart=document.getElementById('liveChart');if(chart){chart.textContent='';const max=Math.max(1,...rows.map(r=>r.unique));if(!rows.length){chart.appendChild(el('div','empty','Le graphique apparaîtra dès les premiers clics.'))}else rows.forEach(r=>{const row=el('div','bar-row');row.appendChild(el('div','bar-name',r.name));const track=el('div','track');const fill=el('div','fill');fill.style.width=Math.max(2,Math.round(r.unique/max*100))+'%';track.appendChild(fill);row.append(track,el('div','bar-value',String(r.unique)));chart.appendChild(row)})}const t=document.getElementById('updatedAt');if(t)t.textContent='· '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});}" +
     "async function refresh(){try{const r=await fetch(endpoint,{cache:'no-store'});if(r.ok)render(await r.json())}catch{}}if(document.getElementById('liveChart')||document.getElementById('leaderboardBody')){setInterval(refresh,5000);setTimeout(refresh,900)}" +
     "const pf=document.getElementById('profileFile');if(pf){pf.addEventListener('change',()=>{const file=pf.files&&pf.files[0];if(!file)return;if(file.size>8000000){alert('Image trop lourde. Choisis une image de moins de 8 Mo.');pf.value='';return}const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const size=320;const canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;const ctx=canvas.getContext('2d');const s=Math.min(img.width,img.height);const sx=(img.width-s)/2,sy=(img.height-s)/2;ctx.drawImage(img,sx,sy,s,s,0,0,size,size);const data=canvas.toDataURL('image/jpeg',0.78);document.getElementById('profileData').value=data;const wrap=document.getElementById('profilePreviewWrap');wrap.textContent='';const im=document.createElement('img');im.className='profile-preview';im.src=data;wrap.appendChild(im)};img.src=reader.result};reader.readAsDataURL(file)})}" ;
 
@@ -421,7 +527,6 @@ async function apiStats(res, comp) {
     competition: {id:comp.id,name:comp.name,status:comp.status},
     totals: {
       participants: participants.length,
-      points: participants.reduce((s,r)=>s+r.points,0),
       clicks: participants.reduce((s,r)=>s+r.clicks,0),
       unique: participants.reduce((s,r)=>s+r.unique,0)
     },
@@ -549,23 +654,6 @@ export default async function handler(req, res) {
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
-      if (action === "points" && req.method === "POST") {
-        const b = parseBody(req);
-        const code = String(b.code || "").trim();
-        const amount = Number.parseInt(String(b.quickAmount || b.amount || ""), 10);
-        const reason = String(b.reason || "").trim().slice(0, 80);
-        if (!code || !Number.isInteger(amount) || amount === 0 || amount < -10000 || amount > 10000) {
-          return send(res, 400, "Valeur de points invalide", "text/plain; charset=utf-8");
-        }
-        const participants = await getParticipants(id);
-        if (!participants.some(p => p.code === code)) {
-          return send(res, 404, "Participant introuvable", "text/plain; charset=utf-8");
-        }
-        await redis(["HINCRBY", statsKey(id, code), "points", amount]);
-        await redis(["HSET", statsKey(id, code), "lastReason", reason || "Ajustement manuel", "updatedAt", new Date().toISOString()]);
-        return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
-      }
-
       if (action === "status" && req.method === "POST") {
         const b = parseBody(req);
         const status = String(b.status || "");
@@ -601,8 +689,8 @@ export default async function handler(req, res) {
       if (action === "export.csv" && req.method === "GET") {
         const rows = await getRankedParticipants(comp);
         const csv = [
-          ["Rang","Participant","Code","Points","Clics","Visiteurs uniques","Lien"],
-          ...rows.map(r=>[r.rank,r.name,r.code,r.points,r.clicks,r.unique,origin+r.link])
+          ["Rang","Participant","Code","Clics","Visiteurs uniques","Lien"],
+          ...rows.map(r=>[r.rank,r.name,r.code,r.clicks,r.unique,origin+r.link])
         ].map(row=>row.map(v=>"\"" + String(v).replace(/"/g,'""') + "\"").join(",")).join("\n");
         res.setHeader("Content-Disposition","attachment; filename=\"" + slugify(comp.name) + "-classement.csv\"");
         return send(res,200,csv,"text/csv; charset=utf-8");
