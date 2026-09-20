@@ -223,7 +223,7 @@ function podiumHtml(rows) {
     "<div class=\"podium-card " + (i === 0 ? "first" : "") + "\">" +
       "<div class=\"podium-rank\">Position #" + (i + 1) + "</div>" +
       "<div class=\"podium-name\">" + esc(r.name) + "</div>" +
-      "<div class=\"podium-score\">" + r.unique + " uniques · " + r.clicks + " clics</div>" +
+      "<div class=\"podium-score\"><b>" + r.points + " pts</b> · " + r.unique + " uniques · " + r.clicks + " clics</div>" +
     "</div>"
   ).join("") + "</div>";
 }
@@ -233,7 +233,7 @@ function participantLinksHtml(rows, origin) {
   return rows.map((r) => {
     const link = origin + r.link;
     return "<article class=\"link-card participant-link-card\" data-search=\"" + esc((r.name + " " + r.code).toLowerCase()) + "\">" +
-      "<div class=\"link-head\"><div><div class=\"link-name\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></div><div class=\"link-rank\">#" + r.rank + "</div></div>" +
+      "<div class=\"link-head\"><div><div class=\"link-name\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div><div style=\"margin-top:7px\"><span class=\"score-badge\">" + r.points + " pts</span></div></div><div class=\"link-rank\">#" + r.rank + "</div></div>" +
       "<div class=\"link-url\" title=\"" + esc(link) + "\">" + esc(link) + "</div>" +
       "<div class=\"link-actions\"><button class=\"btn copy\" type=\"button\" data-link=\"" + esc(link) + "\">Copier le lien</button>" +
       "<button class=\"btn2 share\" type=\"button\" data-link=\"" + esc(link) + "\" data-name=\"" + esc(r.name) + "\">Partager</button>" +
@@ -290,29 +290,34 @@ async function dashboardPage(origin) {
 }
 
 function leaderboardRowsHtml(rows, origin, comp, publicMode) {
-  if (!rows.length) return "<tr><td colspan=\"" + (publicMode ? "6" : "7") + "\" class=\"empty\">Aucun participant.</td></tr>";
+  if (!rows.length) return "<tr><td colspan=\"" + (publicMode ? "5" : "8") + "\" class=\"empty\">Aucun participant.</td></tr>";
   return rows.map((r) => {
     const link = origin + r.link;
     const rate = r.clicks ? Math.round((r.unique / r.clicks) * 100) : 0;
+    if (publicMode) {
+      return "<tr data-code=\"" + esc(r.code) + "\">" +
+        "<td class=\"rank " + (r.rank === 1 ? "one" : "") + "\">" + r.rank + "</td>" +
+        "<td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
+        "<td class=\"points-col\">" + r.points + " pts</td><td>" + r.clicks + "</td><td><b>" + r.unique + "</b></td></tr>";
+    }
     return "<tr data-code=\"" + esc(r.code) + "\">" +
       "<td class=\"rank " + (r.rank === 1 ? "one" : "") + "\">" + r.rank + "</td>" +
       "<td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
-      "<td>" + r.clicks + "</td><td><b>" + r.unique + "</b></td><td>" + rate + "%</td>" +
+      "<td class=\"points-col\">" + r.points + "</td><td>" + r.clicks + "</td><td><b>" + r.unique + "</b></td><td>" + rate + "%</td>" +
       "<td><div class=\"actions\"><button type=\"button\" class=\"iconbtn copy\" data-link=\"" + esc(link) + "\">Copier</button><a class=\"iconbtn\" href=\"" + esc(link) + "\" target=\"_blank\">Ouvrir</a></div></td>" +
-      (publicMode ? "" : "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td>") +
-      "</tr>";
+      "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>";
   }).join("");
 }
 
 function chartHtml(rows) {
-  const max = Math.max(1, ...rows.map(r => r.unique));
+  const max = Math.max(1, ...rows.map(r => r.points));
   return rows.map(r => {
-    const pct = Math.max(2, Math.round((r.unique / max) * 100));
-    return "<div class=\"bar-row\" data-code=\"" + esc(r.code) + "\" title=\"" + esc(r.name) + " · " + r.unique + " visiteurs uniques\">" +
+    const pct = Math.max(2, Math.round((r.points / max) * 100));
+    return "<div class=\"bar-row\" data-code=\"" + esc(r.code) + "\" title=\"" + esc(r.name) + " · " + r.points + " points\">" +
       "<div class=\"bar-name\">" + esc(r.name) + "</div>" +
       "<div class=\"track\"><div class=\"fill\" style=\"width:" + pct + "%\"></div></div>" +
-      "<div class=\"bar-value\">" + r.unique + "</div></div>";
-  }).join("") || "<div class=\"empty\">Le graphique apparaîtra dès les premiers clics.</div>";
+      "<div class=\"bar-value\">" + r.points + " pts</div></div>";
+  }).join("") || "<div class=\"empty\">Le graphique apparaîtra dès l’attribution des premiers points.</div>";
 }
 
 
