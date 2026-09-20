@@ -355,13 +355,26 @@ function pageTitleHtml(title, subtitle, actions = "") {
 }
 
 function participantAdminRows(rows, comp) {
-  if (!rows.length) return "<tr><td colspan=\"6\" class=\"empty\">Aucun participant.</td></tr>";
+  if (!rows.length) return "<tr><td colspan=\"7\" class=\"empty\">Aucun participant.</td></tr>";
   return rows.map(r =>
     "<tr><td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
-    "<td>#" + r.rank + "</td><td>" + r.clicks + "</td><td>" + r.unique + "</td>" +
+    "<td>#" + r.rank + "</td><td class=\"points-col\">" + r.points + "</td><td>" + r.clicks + "</td><td>" + r.unique + "</td>" +
     "<td><button class=\"iconbtn copy\" type=\"button\" data-link=\"/r/" + esc(comp.id) + "/" + esc(r.code) + "\">Copier lien</button></td>" +
     "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>"
   ).join("");
+}
+
+function pointsCardsHtml(rows, comp) {
+  if (!rows.length) return "<div class=\"empty\">Ajoute d’abord des participants.</div>";
+  const id = encodeURIComponent(comp.id);
+  return "<div class=\"point-grid\">" + rows.map(r =>
+    "<article class=\"point-card\"><div class=\"point-head\"><div><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + " · rang #" + r.rank + "</div></div><div class=\"point-value\">" + r.points + " pts</div></div>" +
+    "<form method=\"post\" action=\"/api/competition/" + id + "/points\">" +
+      "<input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\">" +
+      "<div class=\"quick-points\"><button name=\"amount\" value=\"5\" type=\"submit\">+5</button><button name=\"amount\" value=\"10\" type=\"submit\">+10</button><button name=\"amount\" value=\"20\" type=\"submit\">+20</button><button name=\"amount\" value=\"50\" type=\"submit\">+50</button></div>" +
+      "<div class=\"point-custom\"><input name=\"amount\" type=\"number\" step=\"1\" min=\"-10000\" max=\"10000\" placeholder=\"± pts\"><input name=\"reason\" maxlength=\"80\" placeholder=\"Motif : abonnement, bonus…\"><button class=\"btn\" type=\"submit\">Valider</button></div>" +
+    "</form></article>"
+  ).join("") + "</div>";
 }
 
 async function competitionPage(origin, comp, view = "overview", publicMode = false, newCode = "") {
