@@ -128,6 +128,7 @@ async function ensureLegacyMigration() {
     prize: "",
     destination: legacy[0]?.destination || WA_DEFAULT,
     status: "active",
+    theme: "blue",
     createdAt: new Date().toISOString(),
     endsAt: ""
   };
@@ -178,7 +179,7 @@ function pageShell(title, body, extraScript = "") {
     "<meta name=\"theme-color\" content=\"#0b0b0b\">" +
     "<title>" + esc(title) + "</title>" +
     "<style>" +
-    ":root{--bg:#f4f4f2;--card:#fff;--text:#0b0b0b;--muted:#6f6f6f;--line:#e7e7e3;--soft:#f8f8f6;--ok:#2e7d32;--danger:#b42318}" +
+    ":root{--bg:#f3f3f0;--card:#fff;--text:#0a0a0a;--muted:#707070;--line:#e3e3de;--soft:#f8f8f5;--ok:#2e7d32;--danger:#b42318;--accent:#2f5fe3;--accent-soft:#eef3ff;--accent-glow:rgba(47,95,227,.22)}.theme-blue{--accent:#2f5fe3;--accent-soft:#eef3ff;--accent-glow:rgba(47,95,227,.22)}.theme-amber{--accent:#d28a19;--accent-soft:#fff5e3;--accent-glow:rgba(210,138,25,.22)}.theme-red{--accent:#a61f18;--accent-soft:#fff0ee;--accent-glow:rgba(166,31,24,.22)}.theme-mono{--accent:#111;--accent-soft:#f0f0ed;--accent-glow:rgba(255,255,255,.10)}" +
     "*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,\"Segoe UI\",sans-serif}" +
     "a{color:inherit;text-decoration:none}.wrap{max-width:1180px;margin:auto;padding:22px 16px 60px}.top{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:22px}" +
     ".brand{display:flex;align-items:center;gap:11px;font-size:18px;font-weight:850}.mark{width:34px;height:34px;border-radius:11px;background:#0b0b0b;color:#fff;display:grid;place-items:center;font-size:15px}.nav{display:flex;gap:8px;flex-wrap:wrap}" +
@@ -195,8 +196,8 @@ function pageShell(title, body, extraScript = "") {
     ".chart{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:minmax(90px,150px) 1fr 44px;gap:10px;align-items:center}.bar-name{font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.track{height:28px;border-radius:9px;background:#f1f1ee;overflow:hidden;position:relative}.fill{height:100%;min-width:2px;background:#0b0b0b;border-radius:9px;transition:width .6s ease}.bar-value{text-align:right;font-size:12px;font-weight:900}.delta{font-size:11px;margin-left:5px}.up{color:#2e7d32}.down{color:#b42318}" +
     ".empty{padding:28px;text-align:center;color:var(--muted)}.notice{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fafafa;font-size:12px;line-height:1.5}.ok{color:var(--ok)}.dangerText{color:var(--danger)}" +
     ".footer-note{margin-top:14px;font-size:11px;color:#777;line-height:1.5}" +
-    ".top{position:sticky;top:0;z-index:40;background:#f4f4f2e8;backdrop-filter:blur(18px);padding:10px 0;margin-bottom:14px}.brand span:last-child{letter-spacing:-.02em}.hero{background:linear-gradient(135deg,#050505 0%,#171717 100%);box-shadow:0 18px 40px #00000018}.card{box-shadow:0 8px 28px #00000008}.quickbar{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;scrollbar-width:none}.quickbar::-webkit-scrollbar{display:none}.pill{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}.pill.primary{background:#0b0b0b;color:#fff;border-color:#0b0b0b}.success{display:flex;justify-content:space-between;gap:14px;align-items:center;background:#0b0b0b;color:#fff;border-radius:18px;padding:16px 18px;margin-bottom:14px}.success .muted{color:#cfcfcf}.links-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.link-card{border:1px solid var(--line);background:linear-gradient(180deg,#fff,#fbfbfa);border-radius:16px;padding:15px;min-width:0}.link-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.link-name{font-size:15px;font-weight:900;letter-spacing:-.02em}.link-rank{width:28px;height:28px;border-radius:9px;background:#0b0b0b;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:900}.link-url{display:block;width:100%;padding:10px 11px;border-radius:10px;background:#f2f2ef;border:1px solid #ecece8;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:10px}.link-actions{display:flex;gap:7px;flex-wrap:wrap}.link-actions .btn,.link-actions .btn2{padding:9px 11px;font-size:12px}.subnav-note{font-size:12px;color:var(--muted)}.section-anchor{scroll-margin-top:80px}.searchbox{max-width:260px}.hero-row{display:flex;justify-content:space-between;align-items:flex-end;gap:18px}.hero-side{min-width:180px;border:1px solid #ffffff22;background:#ffffff0a;border-radius:16px;padding:14px}.hero-side strong{display:block;font-size:24px;margin-top:4px}.mobile-tip{display:none}" +
-    "@media(max-width:850px){.span8,.span7,.span6,.span5,.span4,.span3{grid-column:span 12}.form-grid{grid-template-columns:1fr}.top{align-items:center}.brand span:last-child{font-size:15px}.hero{padding:22px}.hero-row{display:block}.hero-side{margin-top:18px}.comp{align-items:flex-start;flex-direction:column}.bar-row{grid-template-columns:84px 1fr 34px}.wrap{padding:8px 12px 52px}.links-grid{grid-template-columns:1fr}.success{align-items:flex-start;flex-direction:column}.searchbox{max-width:none;width:100%}.mobile-tip{display:block}.table-wrap{border-radius:12px}.card{padding:15px;border-radius:16px}.hero{border-radius:20px}.quickbar{margin-right:-12px;padding-right:12px}}" +
+    ".top{position:sticky;top:0;z-index:40;background:#f4f4f2e8;backdrop-filter:blur(18px);padding:10px 0;margin-bottom:14px}.brand span:last-child{letter-spacing:-.02em}.hero{background:linear-gradient(135deg,#050505 0%,#171717 100%);box-shadow:0 18px 40px #00000018}.card{box-shadow:0 8px 28px #00000008}.quickbar{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;scrollbar-width:none}.quickbar::-webkit-scrollbar{display:none}.pill{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}.pill.primary{background:#0b0b0b;color:#fff;border-color:#0b0b0b}.success{display:flex;justify-content:space-between;gap:14px;align-items:center;background:#0b0b0b;color:#fff;border-radius:18px;padding:16px 18px;margin-bottom:14px}.success .muted{color:#cfcfcf}.links-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.link-card{border:1px solid var(--line);background:linear-gradient(180deg,#fff,#fbfbfa);border-radius:16px;padding:15px;min-width:0}.link-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.link-name{font-size:15px;font-weight:900;letter-spacing:-.02em}.link-rank{width:28px;height:28px;border-radius:9px;background:#0b0b0b;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:900}.link-url{display:block;width:100%;padding:10px 11px;border-radius:10px;background:#f2f2ef;border:1px solid #ecece8;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:10px}.link-actions{display:flex;gap:7px;flex-wrap:wrap}.link-actions .btn,.link-actions .btn2{padding:9px 11px;font-size:12px}.subnav-note{font-size:12px;color:var(--muted)}.section-anchor{scroll-margin-top:80px}.searchbox{max-width:260px}.hero-row{display:flex;justify-content:space-between;align-items:flex-end;gap:18px}.hero-side{min-width:180px;border:1px solid #ffffff22;background:#ffffff0a;border-radius:16px;padding:14px}.hero-side strong{display:block;font-size:24px;margin-top:4px}.mobile-tip{display:none}.theme{min-height:100vh}.hero{position:relative;overflow:hidden;border:1px solid #ffffff12}.hero:before{content:"";position:absolute;right:-90px;top:-120px;width:420px;height:420px;border-radius:50%;background:radial-gradient(circle,var(--accent-glow),transparent 68%);pointer-events:none}.hero:after{content:attr(data-ghost);position:absolute;right:-12px;bottom:-34px;font-size:clamp(74px,15vw,180px);font-weight:950;letter-spacing:-.08em;color:#ffffff08;line-height:.78;pointer-events:none;white-space:nowrap}.hero-row,.hero h1,.hero p,.eyebrow{position:relative;z-index:1}.eyebrow{color:#d0d0d0}.eyebrow:before{content:"";display:inline-block;width:26px;height:2px;background:var(--accent);vertical-align:middle;margin-right:9px}.hero-side{position:relative;z-index:2}.hero-side:before{content:"";display:block;width:34px;height:4px;border-radius:20px;background:var(--accent);margin-bottom:10px}.stat{position:relative;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease}.stat:after{content:"";position:absolute;left:0;top:0;width:100%;height:3px;background:linear-gradient(90deg,var(--accent),transparent 72%)}.stat:hover,.link-card:hover,.comp:hover{transform:translateY(-2px);box-shadow:0 16px 38px #0000000c}.stat .num{font-variant-numeric:tabular-nums}.link-card{position:relative;overflow:hidden;transition:transform .18s ease,box-shadow .18s ease,border-color .18s ease}.link-card:before{content:"";position:absolute;left:0;top:0;width:4px;height:100%;background:var(--accent);opacity:.88}.link-card:hover{border-color:color-mix(in srgb,var(--accent) 25%,var(--line))}.link-rank{background:var(--accent)}.link-url{background:#f5f5f2}.copy.btn{background:#0a0a0a}.copy.btn:hover{background:var(--accent)}.podium{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:14px}.podium-card{position:relative;border:1px solid var(--line);border-radius:15px;padding:14px;background:linear-gradient(180deg,#fff,#fafaf8);overflow:hidden}.podium-card:after{content:"";position:absolute;inset:auto 0 0 0;height:3px;background:#cfcfca}.podium-card.first:after{background:var(--accent)}.podium-rank{font-size:11px;color:var(--muted);font-weight:850;text-transform:uppercase;letter-spacing:.09em}.podium-name{font-weight:900;font-size:17px;margin-top:4px;letter-spacing:-.02em}.podium-score{font-size:12px;color:var(--muted);margin-top:4px}.podium-card.first{background:linear-gradient(135deg,var(--accent-soft),#fff 62%)}.accent-chip{display:inline-flex;align-items:center;gap:7px;border:1px solid #ffffff22;border-radius:999px;padding:7px 10px;color:#d9d9d9;font-size:11px;font-weight:800;margin-top:10px}.accent-chip i{width:8px;height:8px;border-radius:50%;background:var(--accent);box-shadow:0 0 16px var(--accent)}.theme-swatch{width:9px;height:9px;border-radius:50%;background:var(--accent);box-shadow:0 0 0 4px var(--accent-soft)}.comp{transition:transform .18s ease,box-shadow .18s ease}.comp.theme{min-height:unset}.comp h3{letter-spacing:-.025em}.comp .btn{background:#0a0a0a}.table-wrap tbody tr:first-child td{background:var(--accent-soft)}.table-wrap tbody tr:first-child .rank{color:var(--accent)}.bar-row:first-child .fill{background:var(--accent)}.fill{background:#161616}.section-title h2{font-size:20px}.section-title h2:after{content:"";display:block;width:28px;height:2px;background:var(--accent);margin-top:7px}.pill.primary{background:#0a0a0a}.pill:hover{border-color:var(--accent)}.status .theme-swatch{margin-right:2px}.editorial-note{font-size:clamp(36px,7vw,80px);font-weight:950;letter-spacing:-.065em;line-height:.82;color:#0a0a0a;margin:0 0 16px}.editorial-note span{color:var(--accent)}.theme-select-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}.success{background:linear-gradient(135deg,#050505,#151515);border:1px solid #ffffff10;box-shadow:0 18px 40px #00000016}.success:before{content:"";width:5px;align-self:stretch;background:var(--accent);border-radius:99px}" +
+    "@media(max-width:850px){.span8,.span7,.span6,.span5,.span4,.span3{grid-column:span 12}.form-grid{grid-template-columns:1fr}.top{align-items:center}.brand span:last-child{font-size:15px}.hero{padding:22px}.hero-row{display:block}.hero-side{margin-top:18px}.comp{align-items:flex-start;flex-direction:column}.bar-row{grid-template-columns:84px 1fr 34px}.wrap{padding:8px 12px 52px}.links-grid{grid-template-columns:1fr}.success{align-items:flex-start;flex-direction:column}.searchbox{max-width:none;width:100%}.mobile-tip{display:block}.table-wrap{border-radius:12px}.card{padding:15px;border-radius:16px}.hero{border-radius:20px}.quickbar{margin-right:-12px;padding-right:12px}.podium{grid-template-columns:repeat(3,minmax(170px,1fr));overflow-x:auto;margin-right:-12px;padding-right:12px}.editorial-note{font-size:44px}.theme-select-row{grid-template-columns:1fr}.hero:after{right:-5px;bottom:-18px;font-size:88px}}" +
     "</style></head><body><div class=\"wrap\">" + body + "</div>" +
     "<script>" + extraScript + "</script></body></html>";
 }
@@ -204,6 +205,19 @@ function pageShell(title, body, extraScript = "") {
 function topNav() {
   return "<div class=\"top\"><a class=\"brand\" href=\"/admin\"><span class=\"mark\">CL</span><span>Competition Link Tracker</span></a>" +
     "<div class=\"nav\"><a class=\"btn2\" href=\"/admin\">Dashboard</a></div></div>";
+}
+
+
+function podiumHtml(rows) {
+  const top = rows.slice(0, 3);
+  if (!top.length) return "";
+  return "<div class=\"podium\">" + top.map((r, i) =>
+    "<div class=\"podium-card " + (i === 0 ? "first" : "") + "\">" +
+      "<div class=\"podium-rank\">Position #" + (i + 1) + "</div>" +
+      "<div class=\"podium-name\">" + esc(r.name) + "</div>" +
+      "<div class=\"podium-score\">" + r.unique + " uniques · " + r.clicks + " clics</div>" +
+    "</div>"
+  ).join("") + "</div>";
 }
 
 function participantLinksHtml(rows, origin) {
@@ -238,13 +252,13 @@ async function dashboardPage(origin) {
   }), {participants:0,clicks:0,unique:0});
 
   const cards = summaries.length ? summaries.map((c) =>
-    "<div class=\"comp\"><div><div class=\"comp-meta\"><span class=\"status\"><span class=\"dot " + esc(c.status) + "\"></span>" + esc(c.status) + "</span><span class=\"small muted\">" + c.participants + " participants</span></div>" +
+    "<div class=\"comp theme theme-" + esc(c.theme || "blue") + "\"><div><div class=\"comp-meta\"><span class=\"status\"><span class=\"theme-swatch\"></span>" + esc(c.status) + "</span><span class=\"small muted\">" + c.participants + " participants</span></div>" +
     "<h3>" + esc(c.name) + "</h3><div class=\"small muted\">" + c.unique + " uniques · " + c.clicks + " clics" + (c.endsAt ? " · fin " + esc(c.endsAt) : "") + "</div></div>" +
     "<div class=\"actions\"><a class=\"btn2\" href=\"/leaderboard/" + encodeURIComponent(c.id) + "\">Classement public</a><a class=\"btn\" href=\"/c/" + encodeURIComponent(c.id) + "\">Gérer</a></div></div>"
   ).join("") : "<div class=\"empty\">Aucune compétition pour le moment.</div>";
 
-  const body = topNav() +
-    "<section class=\"hero\"><div class=\"eyebrow\">Dashboard</div><h1>Compétitions.<br>Claires. Mesurables.</h1><p>Crée tes compétitions, génère des liens individuels et suis les classements presque en temps réel depuis un seul tableau de bord.</p></section>" +
+  const body = "<div class=\"theme theme-blue\">" + topNav() +
+    "<section class=\"hero\" data-ghost=\"TRACKER\"><div class=\"eyebrow\">Dashboard live</div><h1>Suivez.<br>Comparez. Gagnez.</h1><p>Une interface éditoriale, sobre et rapide pour gérer tes compétitions, distribuer les liens personnels et suivre les performances presque en temps réel.</p></section>" +
     "<div class=\"grid\">" +
       "<div class=\"card span3 stat\"><div class=\"label\">Compétitions</div><div class=\"num\">" + summaries.length + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">Participants</div><div class=\"num\">" + totals.participants + "</div></div>" +
@@ -258,11 +272,12 @@ async function dashboardPage(origin) {
           "<div class=\"full\"><label>Lien de destination</label><input name=\"destination\" value=\"" + esc(WA_DEFAULT) + "\" required></div>" +
           "<div><label>Date de fin</label><input name=\"endsAt\" type=\"datetime-local\"></div>" +
           "<div><label>Statut</label><select name=\"status\"><option value=\"active\">Active</option><option value=\"draft\">Brouillon</option><option value=\"paused\">En pause</option></select></div>" +
+          "<div class=\"full\"><label>Palette d’accent</label><select name=\"theme\"><option value=\"blue\">Bleu premium</option><option value=\"amber\">Ambre premium</option><option value=\"red\">Rouge profond</option><option value=\"mono\">Monochrome</option></select></div>" +
           "<div class=\"full\"><button class=\"btn\" type=\"submit\" style=\"width:100%\">Créer la compétition</button></div>" +
         "</div></form>" +
         "<div class=\"footer-note\">Les clics et visiteurs uniques indiquent l’activité des liens. Ils ne prouvent pas à eux seuls qu’une personne a effectivement rejoint le groupe WhatsApp.</div>" +
       "</div>" +
-    "</div>";
+    "</div></div>";
   return pageShell("Competition Link Tracker", body);
 }
 
@@ -314,7 +329,7 @@ async function competitionPage(origin, comp, publicMode = false, newCode = "") {
     "</div>" +
     "<div class=\"card span7\"><div class=\"section-title\"><h2>Paramètres de compétition</h2><span class=\"status\"><span class=\"dot " + esc(comp.status) + "\"></span>" + esc(comp.status) + "</span></div>" +
       "<div class=\"notice\"><b>Lien public du classement</b><br><span class=\"muted\">" + esc(origin + "/leaderboard/" + comp.id) + "</span><div style=\"margin-top:10px\"><button class=\"btn2 copy\" type=\"button\" data-link=\"" + esc(origin + "/leaderboard/" + comp.id) + "\">Copier le classement public</button></div></div>" +
-      "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/status\" style=\"margin-top:12px\"><label>Changer le statut</label><div class=\"actions\"><select name=\"status\" style=\"max-width:190px\"><option value=\"active\"" + (comp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (comp.status==="paused"?" selected":"") + ">En pause</option><option value=\"ended\"" + (comp.status==="ended"?" selected":"") + ">Terminée</option><option value=\"draft\"" + (comp.status==="draft"?" selected":"") + ">Brouillon</option></select><button class=\"btn\" type=\"submit\">Enregistrer</button><a class=\"btn2\" href=\"/api/competition/" + encodeURIComponent(comp.id) + "/export.csv\">Exporter CSV</a></div></form>" +
+      "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/status\" style=\"margin-top:12px\"><div class=\"theme-select-row\"><div><label>Statut</label><select name=\"status\"><option value=\"active\"" + (comp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (comp.status==="paused"?" selected":"") + ">En pause</option><option value=\"ended\"" + (comp.status==="ended"?" selected":"") + ">Terminée</option><option value=\"draft\"" + (comp.status==="draft"?" selected":"") + ">Brouillon</option></select></div><div><label>Palette</label><select name=\"theme\"><option value=\"blue\"" + ((comp.theme||"blue")==="blue"?" selected":"") + ">Bleu premium</option><option value=\"amber\"" + (comp.theme==="amber"?" selected":"") + ">Ambre premium</option><option value=\"red\"" + (comp.theme==="red"?" selected":"") + ">Rouge profond</option><option value=\"mono\"" + (comp.theme==="mono"?" selected":"") + ">Monochrome</option></select></div></div><div class=\"actions\" style=\"margin-top:10px\"><button class=\"btn\" type=\"submit\">Enregistrer</button><a class=\"btn2\" href=\"/api/competition/" + encodeURIComponent(comp.id) + "/export.csv\">Exporter CSV</a></div></form>" +
     "</div>";
 
   const fresh = newCode ? rows.find(r => r.code === newCode) : null;
@@ -325,10 +340,11 @@ async function competitionPage(origin, comp, publicMode = false, newCode = "") {
     "<div class=\"card span12 section-anchor\" id=\"links\"><div class=\"section-title\"><div><h2>Liens participants</h2><div class=\"subnav-note\">Chaque personne possède son propre lien. C’est celui-ci qu’il faut lui envoyer.</div></div><input class=\"searchbox\" id=\"participantSearch\" placeholder=\"Rechercher un participant…\"></div>" +
     "<div class=\"links-grid\" id=\"participantLinks\">" + participantLinksHtml(rows, origin) + "</div></div>";
 
-  const body = topNav() +
+  const theme = ["blue","amber","red","mono"].includes(comp.theme) ? comp.theme : "blue";
+  const body = "<div class=\"theme theme-" + theme + "\">" + topNav() +
     "<div class=\"quickbar\"><a class=\"pill primary\" href=\"#links\">Liens participants</a><a class=\"pill\" href=\"#ranking\">Classement</a><a class=\"pill\" href=\"#live\">Graphique live</a>" + (publicMode ? "" : "<a class=\"pill\" href=\"#add\">Ajouter</a>") + "</div>" +
     success +
-    "<section class=\"hero\"><div class=\"hero-row\"><div><div class=\"eyebrow\">" + (publicMode ? "Classement public" : "Gestion de compétition") + "</div><h1>" + esc(comp.name) + "</h1><p>" +
+    "<section class=\"hero\" data-ghost=\"LIVE\"><div class=\"hero-row\"><div><div class=\"eyebrow\">" + (publicMode ? "Classement public" : "Gestion de compétition") + "</div><h1>" + esc(comp.name) + "</h1><p>" +
       (comp.prize ? "Récompense : " + esc(comp.prize) + ". " : "") +
       "Le classement se met à jour automatiquement à partir de l’activité des liens participants.</p></div><div class=\"hero-side\"><div class=\"small\" style=\"color:#aaa\">Statut</div><strong>" + esc(comp.status) + "</strong><div class=\"small\" style=\"color:#aaa;margin-top:8px\">" + rows.length + " participants</div></div></div></section>" +
     "<div class=\"grid\">" +
@@ -337,11 +353,12 @@ async function competitionPage(origin, comp, publicMode = false, newCode = "") {
       "<div class=\"card span3 stat\"><div class=\"label\">Uniques</div><div class=\"num\" id=\"statUnique\">" + totals.unique + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">En tête</div><div class=\"num\" id=\"statLeader\" style=\"font-size:20px\">" + esc(leader ? leader.name : "—") + "</div></div>" +
       linksPanel +
+      "<div class=\"card span12\"><div class=\"section-title\"><div><h2>Podium actuel</h2><div class=\"subnav-note\">Les trois meilleures positions au dernier rafraîchissement.</div></div></div>" + podiumHtml(rows) + "</div>" +
       "<div class=\"card span12 section-anchor\" id=\"live\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>" +
       "<div class=\"card span12 section-anchor\" id=\"ranking\"><div class=\"section-title\"><h2>Classement</h2><span class=\"small muted\">1er → dernier · score basé sur les visiteurs uniques</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th>" + (publicMode ? "" : "<th>Action</th>") + "</tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, publicMode) + "</tbody></table></div></div>" +
       adminTools +
       "<div class=\"card span12\"><div class=\"notice\"><b>À savoir</b> — « Visiteurs uniques » mesure les personnes distinctes détectées sur le lien de suivi. WhatsApp ne fournit pas à ce tracker une confirmation automatique de l’adhésion au groupe. Pour une compétition basée sur les membres réellement rejoints, il faudra ajouter une étape de validation.</div></div>" +
-    "</div>";
+    "</div></div>";
 
   const script =
     "const endpoint=" + JSON.stringify(endpoint) + ";" +
@@ -484,6 +501,7 @@ export default async function handler(req, res) {
         prize: String(b.prize || "").trim(),
         destination: String(b.destination || WA_DEFAULT).trim(),
         status: ["active","draft","paused"].includes(String(b.status)) ? String(b.status) : "active",
+        theme: ["blue","amber","red","mono"].includes(String(b.theme)) ? String(b.theme) : "blue",
         endsAt: String(b.endsAt || "").trim(),
         createdAt: new Date().toISOString()
       };
@@ -539,11 +557,14 @@ export default async function handler(req, res) {
       if (action === "status" && req.method === "POST") {
         const b = parseBody(req);
         const status = String(b.status || "");
+        const theme = String(b.theme || comp.theme || "blue");
         const allowed = ["active","paused","ended","draft"];
+        const themes = ["blue","amber","red","mono"];
         if (!allowed.includes(status)) return send(res, 400, "Statut invalide", "text/plain; charset=utf-8");
         const comps = await getCompetitions();
         const i = comps.findIndex(c=>c.id===id);
         comps[i].status = status;
+        comps[i].theme = themes.includes(theme) ? theme : "blue";
         await saveCompetitions(comps);
         return redirect(res, "/c/" + encodeURIComponent(id), 303);
       }
