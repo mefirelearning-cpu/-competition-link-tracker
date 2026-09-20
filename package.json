@@ -1,1 +1,1 @@
-{"name":"competition-link-tracker","version":"1.0.0","private":true,"scripts":{"deploy":"wrangler deploy","dev":"wrangler dev"},"devDependencies":{"wrangler":"^4.0.0"}}
+{"name":"competition-link-tracker","version":"2.0.0","private":true,"scripts":{"dev":"vercel dev","deploy":"vercel --prod"},"engines":{"node":">=20"}}
