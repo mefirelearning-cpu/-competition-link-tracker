@@ -1,0 +1,1 @@
+{"rewrites":[{"source":"/","destination":"/api/index"},{"source":"/admin","destination":"/api/index?path=admin"},{"source":"/r/:code","destination":"/api/index?path=r/:code"},{"source":"/api/add","destination":"/api/index?path=api/add"},{"source":"/api/delete","destination":"/api/index?path=api/delete"},{"source":"/api/stats","destination":"/api/index?path=api/stats"}]}
