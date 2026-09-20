@@ -527,17 +527,21 @@ export default async function handler(req, res) {
     }
 
     if (path.startsWith("c/")) {
-      const id = decodeURIComponent(path.slice(2));
+      const parts = path.split("/").map(decodeURIComponent);
+      const id = parts[1] || "";
+      const view = parts[2] || "overview";
+      const allowedViews = ["overview","links","ranking","live","participants","settings"];
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
-      return send(res, 200, await competitionPage(origin, comp, false, String(req.query?.new || "")));
+      if (!allowedViews.includes(view)) return send(res, 404, "Rubrique introuvable", "text/plain; charset=utf-8");
+      return send(res, 200, await competitionPage(origin, comp, view, false, String(req.query?.new || "")));
     }
 
     if (path.startsWith("leaderboard/")) {
       const id = decodeURIComponent(path.slice("leaderboard/".length));
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
-      return send(res, 200, await competitionPage(origin, comp, true));
+      return send(res, 200, await competitionPage(origin, comp, "ranking", true));
     }
 
     if (path.startsWith("r/")) {
@@ -602,7 +606,7 @@ export default async function handler(req, res) {
         const participants = await getParticipants(id);
         participants.push({name,code,active:true,createdAt:new Date().toISOString()});
         await saveParticipants(id, participants);
-        return redirect(res, "/c/" + encodeURIComponent(id) + "?new=" + encodeURIComponent(code) + "#links", 303);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/links?new=" + encodeURIComponent(code), 303);
       }
 
       if (action === "bulk" && req.method === "POST") {
@@ -616,7 +620,7 @@ export default async function handler(req, res) {
           participants.push({name,code,active:true,createdAt:new Date().toISOString()});
         }
         await saveParticipants(id, participants);
-        return redirect(res, "/c/" + encodeURIComponent(id) + "#links", 303);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/links", 303);
       }
 
       if (action === "delete-participant" && req.method === "POST") {
@@ -625,7 +629,7 @@ export default async function handler(req, res) {
         const participants = (await getParticipants(id)).filter(p=>p.code!==code);
         await saveParticipants(id, participants);
         await redis(["DEL", statsKey(id, code)]);
-        return redirect(res, "/c/" + encodeURIComponent(id), 303);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
       if (action === "status" && req.method === "POST") {
@@ -640,7 +644,24 @@ export default async function handler(req, res) {
         comps[i].status = status;
         comps[i].theme = themes.includes(theme) ? theme : "blue";
         await saveCompetitions(comps);
-        return redirect(res, "/c/" + encodeURIComponent(id), 303);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
+      }
+
+      if (action === "profile" && req.method === "POST") {
+        const b = parseBody(req);
+        if (String(b.remove || "") === "1") {
+          await saveProfile(id, "");
+          return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
+        }
+        const data = String(b.profileData || "");
+        if (!/^data:image\/(jpeg|jpg|png|webp);base64,/i.test(data)) {
+          return send(res, 400, "Image invalide", "text/plain; charset=utf-8");
+        }
+        if (data.length > 260000) {
+          return send(res, 413, "Image trop lourde après compression", "text/plain; charset=utf-8");
+        }
+        await saveProfile(id, data);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
       }
 
       if (action === "export.csv" && req.method === "GET") {
