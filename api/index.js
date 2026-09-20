@@ -552,7 +552,7 @@ export default async function handler(req, res) {
       if (action === "points" && req.method === "POST") {
         const b = parseBody(req);
         const code = String(b.code || "").trim();
-        const amount = Number.parseInt(String(b.amount || ""), 10);
+        const amount = Number.parseInt(String(b.quickAmount || b.amount || ""), 10);
         const reason = String(b.reason || "").trim().slice(0, 80);
         if (!code || !Number.isInteger(amount) || amount === 0 || amount < -10000 || amount > 10000) {
           return send(res, 400, "Valeur de points invalide", "text/plain; charset=utf-8");
