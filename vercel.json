@@ -13,6 +13,10 @@
       "destination": "/api/index?path=c/:id"
     },
     {
+      "source": "/c/:id/:view",
+      "destination": "/api/index?path=c/:id/:view"
+    },
+    {
       "source": "/leaderboard/:id",
       "destination": "/api/index?path=leaderboard/:id"
     },
@@ -47,6 +51,10 @@
     {
       "source": "/api/competition/:id/status",
       "destination": "/api/index?path=api/competition/:id/status"
+    },
+    {
+      "source": "/api/competition/:id/profile",
+      "destination": "/api/index?path=api/competition/:id/profile"
     },
     {
       "source": "/api/competition/:id/export.csv",
