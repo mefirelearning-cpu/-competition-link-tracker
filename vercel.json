@@ -1,1 +1,56 @@
-{"rewrites":[{"source":"/","destination":"/api/index"},{"source":"/admin","destination":"/api/index?path=admin"},{"source":"/r/:code","destination":"/api/index?path=r/:code"},{"source":"/api/add","destination":"/api/index?path=api/add"},{"source":"/api/delete","destination":"/api/index?path=api/delete"},{"source":"/api/stats","destination":"/api/index?path=api/stats"}]}
+{
+  "rewrites": [
+    {
+      "source": "/",
+      "destination": "/api/index"
+    },
+    {
+      "source": "/admin",
+      "destination": "/api/index?path=admin"
+    },
+    {
+      "source": "/c/:id",
+      "destination": "/api/index?path=c/:id"
+    },
+    {
+      "source": "/leaderboard/:id",
+      "destination": "/api/index?path=leaderboard/:id"
+    },
+    {
+      "source": "/r/:id/:code",
+      "destination": "/api/index?path=r/:id/:code"
+    },
+    {
+      "source": "/r/:code",
+      "destination": "/api/index?path=r/:code"
+    },
+    {
+      "source": "/api/competition/create",
+      "destination": "/api/index?path=api/competition/create"
+    },
+    {
+      "source": "/api/competition/:id/stats",
+      "destination": "/api/index?path=api/competition/:id/stats"
+    },
+    {
+      "source": "/api/competition/:id/add",
+      "destination": "/api/index?path=api/competition/:id/add"
+    },
+    {
+      "source": "/api/competition/:id/bulk",
+      "destination": "/api/index?path=api/competition/:id/bulk"
+    },
+    {
+      "source": "/api/competition/:id/delete-participant",
+      "destination": "/api/index?path=api/competition/:id/delete-participant"
+    },
+    {
+      "source": "/api/competition/:id/status",
+      "destination": "/api/index?path=api/competition/:id/status"
+    },
+    {
+      "source": "/api/competition/:id/export.csv",
+      "destination": "/api/index?path=api/competition/:id/export.csv"
+    }
+  ]
+}
