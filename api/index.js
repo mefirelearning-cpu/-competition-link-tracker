@@ -195,7 +195,8 @@ function pageShell(title, body, extraScript = "") {
     ".chart{display:grid;gap:12px}.bar-row{display:grid;grid-template-columns:minmax(90px,150px) 1fr 44px;gap:10px;align-items:center}.bar-name{font-size:12px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.track{height:28px;border-radius:9px;background:#f1f1ee;overflow:hidden;position:relative}.fill{height:100%;min-width:2px;background:#0b0b0b;border-radius:9px;transition:width .6s ease}.bar-value{text-align:right;font-size:12px;font-weight:900}.delta{font-size:11px;margin-left:5px}.up{color:#2e7d32}.down{color:#b42318}" +
     ".empty{padding:28px;text-align:center;color:var(--muted)}.notice{padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:#fafafa;font-size:12px;line-height:1.5}.ok{color:var(--ok)}.dangerText{color:var(--danger)}" +
     ".footer-note{margin-top:14px;font-size:11px;color:#777;line-height:1.5}" +
-    "@media(max-width:850px){.span8,.span7,.span6,.span5,.span4,.span3{grid-column:span 12}.form-grid{grid-template-columns:1fr}.top{align-items:flex-start}.hero{padding:22px}.comp{align-items:flex-start;flex-direction:column}.bar-row{grid-template-columns:90px 1fr 36px}.wrap{padding-top:14px}}" +
+    ".top{position:sticky;top:0;z-index:40;background:#f4f4f2e8;backdrop-filter:blur(18px);padding:10px 0;margin-bottom:14px}.brand span:last-child{letter-spacing:-.02em}.hero{background:linear-gradient(135deg,#050505 0%,#171717 100%);box-shadow:0 18px 40px #00000018}.card{box-shadow:0 8px 28px #00000008}.quickbar{display:flex;gap:8px;overflow-x:auto;padding:2px 0 14px;scrollbar-width:none}.quickbar::-webkit-scrollbar{display:none}.pill{border:1px solid var(--line);background:#fff;padding:9px 12px;border-radius:999px;font-size:12px;font-weight:800;white-space:nowrap}.pill.primary{background:#0b0b0b;color:#fff;border-color:#0b0b0b}.success{display:flex;justify-content:space-between;gap:14px;align-items:center;background:#0b0b0b;color:#fff;border-radius:18px;padding:16px 18px;margin-bottom:14px}.success .muted{color:#cfcfcf}.links-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}.link-card{border:1px solid var(--line);background:linear-gradient(180deg,#fff,#fbfbfa);border-radius:16px;padding:15px;min-width:0}.link-head{display:flex;justify-content:space-between;gap:12px;align-items:flex-start;margin-bottom:10px}.link-name{font-size:15px;font-weight:900;letter-spacing:-.02em}.link-rank{width:28px;height:28px;border-radius:9px;background:#0b0b0b;color:#fff;display:grid;place-items:center;font-size:12px;font-weight:900}.link-url{display:block;width:100%;padding:10px 11px;border-radius:10px;background:#f2f2ef;border:1px solid #ecece8;font:11px ui-monospace,SFMono-Regular,Menlo,monospace;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-bottom:10px}.link-actions{display:flex;gap:7px;flex-wrap:wrap}.link-actions .btn,.link-actions .btn2{padding:9px 11px;font-size:12px}.subnav-note{font-size:12px;color:var(--muted)}.section-anchor{scroll-margin-top:80px}.searchbox{max-width:260px}.hero-row{display:flex;justify-content:space-between;align-items:flex-end;gap:18px}.hero-side{min-width:180px;border:1px solid #ffffff22;background:#ffffff0a;border-radius:16px;padding:14px}.hero-side strong{display:block;font-size:24px;margin-top:4px}.mobile-tip{display:none}" +
+    "@media(max-width:850px){.span8,.span7,.span6,.span5,.span4,.span3{grid-column:span 12}.form-grid{grid-template-columns:1fr}.top{align-items:center}.brand span:last-child{font-size:15px}.hero{padding:22px}.hero-row{display:block}.hero-side{margin-top:18px}.comp{align-items:flex-start;flex-direction:column}.bar-row{grid-template-columns:84px 1fr 34px}.wrap{padding:8px 12px 52px}.links-grid{grid-template-columns:1fr}.success{align-items:flex-start;flex-direction:column}.searchbox{max-width:none;width:100%}.mobile-tip{display:block}.table-wrap{border-radius:12px}.card{padding:15px;border-radius:16px}.hero{border-radius:20px}.quickbar{margin-right:-12px;padding-right:12px}}" +
     "</style></head><body><div class=\"wrap\">" + body + "</div>" +
     "<script>" + extraScript + "</script></body></html>";
 }
@@ -203,6 +204,19 @@ function pageShell(title, body, extraScript = "") {
 function topNav() {
   return "<div class=\"top\"><a class=\"brand\" href=\"/admin\"><span class=\"mark\">CL</span><span>Competition Link Tracker</span></a>" +
     "<div class=\"nav\"><a class=\"btn2\" href=\"/admin\">Dashboard</a></div></div>";
+}
+
+function participantLinksHtml(rows, origin) {
+  if (!rows.length) return "<div class=\"empty\">Ajoute un participant et son lien personnel apparaîtra immédiatement ici.</div>";
+  return rows.map((r) => {
+    const link = origin + r.link;
+    return "<article class=\"link-card participant-link-card\" data-search=\"" + esc((r.name + " " + r.code).toLowerCase()) + "\">" +
+      "<div class=\"link-head\"><div><div class=\"link-name\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></div><div class=\"link-rank\">#" + r.rank + "</div></div>" +
+      "<div class=\"link-url\" title=\"" + esc(link) + "\">" + esc(link) + "</div>" +
+      "<div class=\"link-actions\"><button class=\"btn copy\" type=\"button\" data-link=\"" + esc(link) + "\">Copier le lien</button>" +
+      "<button class=\"btn2 share\" type=\"button\" data-link=\"" + esc(link) + "\" data-name=\"" + esc(r.name) + "\">Partager</button>" +
+      "<a class=\"btn2\" href=\"" + esc(link) + "\" target=\"_blank\">Tester</a></div></article>";
+  }).join("");
 }
 
 async function dashboardPage(origin) {
@@ -278,7 +292,7 @@ function chartHtml(rows) {
   }).join("") || "<div class=\"empty\">Le graphique apparaîtra dès les premiers clics.</div>";
 }
 
-async function competitionPage(origin, comp, publicMode = false) {
+async function competitionPage(origin, comp, publicMode = false, newCode = "") {
   const rows = await getRankedParticipants(comp);
   const totals = {
     participants: rows.length,
@@ -290,7 +304,7 @@ async function competitionPage(origin, comp, publicMode = false) {
   const tableCols = publicMode ? 6 : 7;
 
   const adminTools = publicMode ? "" :
-    "<div class=\"card span5\"><div class=\"section-title\"><h2>Ajouter des participants</h2><span class=\"small muted\">Individuel ou en masse</span></div>" +
+    "<div class=\"card span5 section-anchor\" id=\"add\"><div class=\"section-title\"><h2>Ajouter des participants</h2><span class=\"small muted\">Individuel ou en masse</span></div>" +
       "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/add\"><div class=\"form-grid\">" +
         "<div><label>Nom</label><input name=\"name\" placeholder=\"Nom du participant\" required></div>" +
         "<div><label>Code (facultatif)</label><input name=\"code\" placeholder=\"Généré automatiquement\"></div>" +
@@ -303,17 +317,28 @@ async function competitionPage(origin, comp, publicMode = false) {
       "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/status\" style=\"margin-top:12px\"><label>Changer le statut</label><div class=\"actions\"><select name=\"status\" style=\"max-width:190px\"><option value=\"active\"" + (comp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (comp.status==="paused"?" selected":"") + ">En pause</option><option value=\"ended\"" + (comp.status==="ended"?" selected":"") + ">Terminée</option><option value=\"draft\"" + (comp.status==="draft"?" selected":"") + ">Brouillon</option></select><button class=\"btn\" type=\"submit\">Enregistrer</button><a class=\"btn2\" href=\"/api/competition/" + encodeURIComponent(comp.id) + "/export.csv\">Exporter CSV</a></div></form>" +
     "</div>";
 
+  const fresh = newCode ? rows.find(r => r.code === newCode) : null;
+  const success = (!publicMode && fresh) ?
+    "<div class=\"success\"><div><b>Participant ajouté : " + esc(fresh.name) + "</b><div class=\"small muted\">Son lien personnel est prêt à être envoyé.</div></div><div class=\"link-actions\"><button class=\"btn2 copy\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\">Copier maintenant</button><button class=\"btn2 share\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\" data-name=\"" + esc(fresh.name) + "\">Partager</button></div></div>" : "";
+
+  const linksPanel = publicMode ? "" :
+    "<div class=\"card span12 section-anchor\" id=\"links\"><div class=\"section-title\"><div><h2>Liens participants</h2><div class=\"subnav-note\">Chaque personne possède son propre lien. C’est celui-ci qu’il faut lui envoyer.</div></div><input class=\"searchbox\" id=\"participantSearch\" placeholder=\"Rechercher un participant…\"></div>" +
+    "<div class=\"links-grid\" id=\"participantLinks\">" + participantLinksHtml(rows, origin) + "</div></div>";
+
   const body = topNav() +
-    "<section class=\"hero\"><div class=\"eyebrow\">" + (publicMode ? "Classement public" : "Gestion de compétition") + "</div><h1>" + esc(comp.name) + "</h1><p>" +
+    "<div class=\"quickbar\"><a class=\"pill primary\" href=\"#links\">Liens participants</a><a class=\"pill\" href=\"#ranking\">Classement</a><a class=\"pill\" href=\"#live\">Graphique live</a>" + (publicMode ? "" : "<a class=\"pill\" href=\"#add\">Ajouter</a>") + "</div>" +
+    success +
+    "<section class=\"hero\"><div class=\"hero-row\"><div><div class=\"eyebrow\">" + (publicMode ? "Classement public" : "Gestion de compétition") + "</div><h1>" + esc(comp.name) + "</h1><p>" +
       (comp.prize ? "Récompense : " + esc(comp.prize) + ". " : "") +
-      "Le classement se met à jour automatiquement à partir de l’activité des liens participants.</p></section>" +
+      "Le classement se met à jour automatiquement à partir de l’activité des liens participants.</p></div><div class=\"hero-side\"><div class=\"small\" style=\"color:#aaa\">Statut</div><strong>" + esc(comp.status) + "</strong><div class=\"small\" style=\"color:#aaa;margin-top:8px\">" + rows.length + " participants</div></div></div></section>" +
     "<div class=\"grid\">" +
       "<div class=\"card span3 stat\"><div class=\"label\">Participants</div><div class=\"num\" id=\"statParticipants\">" + totals.participants + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">Clics</div><div class=\"num\" id=\"statClicks\">" + totals.clicks + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">Uniques</div><div class=\"num\" id=\"statUnique\">" + totals.unique + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">En tête</div><div class=\"num\" id=\"statLeader\" style=\"font-size:20px\">" + esc(leader ? leader.name : "—") + "</div></div>" +
-      "<div class=\"card span12\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>" +
-      "<div class=\"card span12\"><div class=\"section-title\"><h2>Classement</h2><span class=\"small muted\">1er → dernier · score basé sur les visiteurs uniques</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th>" + (publicMode ? "" : "<th>Action</th>") + "</tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, publicMode) + "</tbody></table></div></div>" +
+      linksPanel +
+      "<div class=\"card span12 section-anchor\" id=\"live\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>" +
+      "<div class=\"card span12 section-anchor\" id=\"ranking\"><div class=\"section-title\"><h2>Classement</h2><span class=\"small muted\">1er → dernier · score basé sur les visiteurs uniques</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th>" + (publicMode ? "" : "<th>Action</th>") + "</tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, publicMode) + "</tbody></table></div></div>" +
       adminTools +
       "<div class=\"card span12\"><div class=\"notice\"><b>À savoir</b> — « Visiteurs uniques » mesure les personnes distinctes détectées sur le lien de suivi. WhatsApp ne fournit pas à ce tracker une confirmation automatique de l’adhésion au groupe. Pour une compétition basée sur les membres réellement rejoints, il faudra ajouter une étape de validation.</div></div>" +
     "</div>";
@@ -323,7 +348,8 @@ async function competitionPage(origin, comp, publicMode = false) {
     "const origin=" + JSON.stringify(origin) + ";" +
     "const publicMode=" + JSON.stringify(publicMode) + ";" +
     "let previousRanks={};" +
-    "document.addEventListener('click',async e=>{const b=e.target.closest('.copy');if(!b)return;const v=b.dataset.link;try{await navigator.clipboard.writeText(v);const old=b.textContent;b.textContent='Copié ✓';setTimeout(()=>b.textContent=old,1200)}catch{prompt('Copie ce lien :',v)}});" +
+    "document.addEventListener('click',async e=>{const copy=e.target.closest('.copy');if(copy){const v=copy.dataset.link;try{await navigator.clipboard.writeText(v);const old=copy.textContent;copy.textContent='Copié ✓';setTimeout(()=>copy.textContent=old,1200)}catch{prompt('Copie ce lien :',v)}return}const share=e.target.closest('.share');if(share){const v=share.dataset.link;const name=share.dataset.name||'participant';if(navigator.share){try{await navigator.share({title:'Lien de '+name,text:'Voici ton lien personnel pour la compétition :',url:v})}catch{}}else{try{await navigator.clipboard.writeText(v);alert('Lien copié')}catch{prompt('Copie ce lien :',v)}}}});" +
+    "const search=document.getElementById('participantSearch');if(search){search.addEventListener('input',()=>{const q=search.value.toLowerCase().trim();document.querySelectorAll('.participant-link-card').forEach(x=>x.style.display=x.dataset.search.includes(q)?'':'none')})}" +
     "function el(t,c,txt){const x=document.createElement(t);if(c)x.className=c;if(txt!==undefined)x.textContent=txt;return x}" +
     "function render(data){" +
       "const rows=data.participants||[];document.getElementById('statParticipants').textContent=rows.length;document.getElementById('statClicks').textContent=data.totals.clicks;document.getElementById('statUnique').textContent=data.totals.unique;document.getElementById('statLeader').textContent=rows[0]?rows[0].name:'—';" +
@@ -335,6 +361,7 @@ async function competitionPage(origin, comp, publicMode = false) {
         "if(!publicMode){const td=el('td');const f=document.createElement('form');f.method='post';f.action='/api/competition/'+encodeURIComponent(data.competition.id)+'/delete-participant';const i=document.createElement('input');i.type='hidden';i.name='code';i.value=r.code;const b=el('button','danger','Supprimer');b.type='submit';f.append(i,b);td.appendChild(f);tr.appendChild(td)}body.appendChild(tr)});" +
       "previousRanks=Object.fromEntries(rows.map(r=>[r.code,r.rank]));" +
       "const chart=document.getElementById('liveChart');chart.textContent='';const max=Math.max(1,...rows.map(r=>r.unique));if(!rows.length){chart.appendChild(el('div','empty','Le graphique apparaîtra dès les premiers clics.'))}else rows.forEach(r=>{const row=el('div','bar-row');row.title=r.name+' · '+r.unique+' visiteurs uniques';row.appendChild(el('div','bar-name',r.name));const track=el('div','track');const fill=el('div','fill');fill.style.width=Math.max(2,Math.round(r.unique/max*100))+'%';track.appendChild(fill);row.appendChild(track);row.appendChild(el('div','bar-value',String(r.unique)));chart.appendChild(row)});" +
+      "const links=document.getElementById('participantLinks');if(links){links.textContent='';rows.forEach(r=>{const card=el('article','link-card participant-link-card');card.dataset.search=(r.name+' '+r.code).toLowerCase();const head=el('div','link-head');const left=el('div');left.append(el('div','link-name',r.name),el('div','code',r.code));head.append(left,el('div','link-rank','#'+r.rank));card.appendChild(head);const url=origin+r.link;const urlBox=el('div','link-url',url);urlBox.title=url;card.appendChild(urlBox);const acts=el('div','link-actions');const cp=el('button','btn copy','Copier le lien');cp.type='button';cp.dataset.link=url;const sh=el('button','btn2 share','Partager');sh.type='button';sh.dataset.link=url;sh.dataset.name=r.name;const op=el('a','btn2','Tester');op.href=url;op.target='_blank';acts.append(cp,sh,op);card.appendChild(acts);links.appendChild(card)})}" +
       "document.getElementById('updatedAt').textContent='· '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});" +
     "}" +
     "async function refresh(){try{const r=await fetch(endpoint,{cache:'no-store'});if(r.ok)render(await r.json())}catch{}}" +
@@ -412,7 +439,7 @@ export default async function handler(req, res) {
       const id = decodeURIComponent(path.slice(2));
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
-      return send(res, 200, await competitionPage(origin, comp, false));
+      return send(res, 200, await competitionPage(origin, comp, false, String(req.query?.new || "")));
     }
 
     if (path.startsWith("leaderboard/")) {
@@ -483,7 +510,7 @@ export default async function handler(req, res) {
         const participants = await getParticipants(id);
         participants.push({name,code,active:true,createdAt:new Date().toISOString()});
         await saveParticipants(id, participants);
-        return redirect(res, "/c/" + encodeURIComponent(id), 303);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "?new=" + encodeURIComponent(code) + "#links", 303);
       }
 
       if (action === "bulk" && req.method === "POST") {
@@ -497,7 +524,7 @@ export default async function handler(req, res) {
           participants.push({name,code,active:true,createdAt:new Date().toISOString()});
         }
         await saveParticipants(id, participants);
-        return redirect(res, "/c/" + encodeURIComponent(id), 303);
+        return redirect(res, "/c/" + encodeURIComponent(id) + "#links", 303);
       }
 
       if (action === "delete-participant" && req.method === "POST") {
