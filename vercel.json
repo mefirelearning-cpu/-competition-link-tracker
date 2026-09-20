@@ -49,6 +49,10 @@
       "destination": "/api/index?path=api/competition/:id/delete-participant"
     },
     {
+      "source": "/api/competition/:id/points",
+      "destination": "/api/index?path=api/competition/:id/points"
+    },
+    {
       "source": "/api/competition/:id/status",
       "destination": "/api/index?path=api/competition/:id/status"
     },
