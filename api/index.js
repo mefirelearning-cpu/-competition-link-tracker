@@ -311,84 +311,154 @@ function chartHtml(rows) {
   }).join("") || "<div class=\"empty\">Le graphique apparaîtra dès les premiers clics.</div>";
 }
 
-async function competitionPage(origin, comp, publicMode = false, newCode = "") {
+
+function profileAvatarHtml(profile, name, cls = "") {
+  const initial = esc(String(name || "C").trim().charAt(0).toUpperCase() || "C");
+  if (profile && /^data:image\/(jpeg|jpg|png|webp);base64,/i.test(profile)) {
+    return "<img class=\"profile-img " + esc(cls) + "\" src=\"" + esc(profile) + "\" alt=\"Photo de la compétition\">";
+  }
+  return "<div class=\"profile-fallback " + esc(cls) + "\">" + initial + "</div>";
+}
+
+function competitionSidebar(comp, view, profile) {
+  const id = encodeURIComponent(comp.id);
+  const items = [
+    ["overview","Vue d’ensemble","/c/" + id],
+    ["links","Liens participants","/c/" + id + "/links"],
+    ["ranking","Classement","/c/" + id + "/ranking"],
+    ["live","Graphique live","/c/" + id + "/live"],
+    ["participants","Participants","/c/" + id + "/participants"],
+    ["settings","Paramètres","/c/" + id + "/settings"]
+  ];
+  return "<aside class=\"side\">" +
+    "<div class=\"side-profile\">" + profileAvatarHtml(profile, comp.name) +
+      "<div><div class=\"side-name\">" + esc(comp.name) + "</div><div class=\"side-meta\">" + esc(comp.status) + "</div></div></div>" +
+    "<nav class=\"side-nav\">" +
+      items.map(([key,label,href]) => "<a class=\"side-link " + (view === key ? "active" : "") + "\" href=\"" + href + "\"><span class=\"nav-dot\"></span>" + label + "</a>").join("") +
+    "</nav>" +
+    "<div class=\"side-public\"><a class=\"side-link\" target=\"_blank\" href=\"/leaderboard/" + id + "\"><span class=\"nav-dot\"></span>Classement public</a></div>" +
+  "</aside>";
+}
+
+function pageTitleHtml(title, subtitle, actions = "") {
+  return "<div class=\"page-title\"><div><h2>" + esc(title) + "</h2><p>" + esc(subtitle) + "</p></div>" +
+    (actions ? "<div class=\"page-actions\">" + actions + "</div>" : "") + "</div>";
+}
+
+function participantAdminRows(rows, comp) {
+  if (!rows.length) return "<tr><td colspan=\"6\" class=\"empty\">Aucun participant.</td></tr>";
+  return rows.map(r =>
+    "<tr><td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
+    "<td>#" + r.rank + "</td><td>" + r.clicks + "</td><td>" + r.unique + "</td>" +
+    "<td><button class=\"iconbtn copy\" type=\"button\" data-link=\"/r/" + esc(comp.id) + "/" + esc(r.code) + "\">Copier lien</button></td>" +
+    "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>"
+  ).join("");
+}
+
+async function competitionPage(origin, comp, view = "overview", publicMode = false, newCode = "") {
   const rows = await getRankedParticipants(comp);
+  const profile = await getProfile(comp.id);
   const totals = {
     participants: rows.length,
     clicks: rows.reduce((s,r) => s + r.clicks, 0),
     unique: rows.reduce((s,r) => s + r.unique, 0)
   };
   const leader = rows[0];
-  const endpoint = "/api/competition/" + encodeURIComponent(comp.id) + "/stats";
-  const tableCols = publicMode ? 6 : 7;
-
-  const adminTools = publicMode ? "" :
-    "<div class=\"card span5 section-anchor\" id=\"add\"><div class=\"section-title\"><h2>Ajouter des participants</h2><span class=\"small muted\">Individuel ou en masse</span></div>" +
-      "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/add\"><div class=\"form-grid\">" +
-        "<div><label>Nom</label><input name=\"name\" placeholder=\"Nom du participant\" required></div>" +
-        "<div><label>Code (facultatif)</label><input name=\"code\" placeholder=\"Généré automatiquement\"></div>" +
-        "<div class=\"full\"><button class=\"btn\" style=\"width:100%\" type=\"submit\">Ajouter le participant</button></div>" +
-      "</div></form><hr style=\"border:0;border-top:1px solid var(--line);margin:18px 0\">" +
-      "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/bulk\"><label>Ajout multiple</label><textarea name=\"names\" placeholder=\"Un nom par ligne&#10;Aron&#10;Tony&#10;Marc&#10;Sarah\"></textarea><button class=\"btn2\" style=\"width:100%;margin-top:9px\" type=\"submit\">Ajouter toute la liste</button></form>" +
-    "</div>" +
-    "<div class=\"card span7\"><div class=\"section-title\"><h2>Paramètres de compétition</h2><span class=\"status\"><span class=\"dot " + esc(comp.status) + "\"></span>" + esc(comp.status) + "</span></div>" +
-      "<div class=\"notice\"><b>Lien public du classement</b><br><span class=\"muted\">" + esc(origin + "/leaderboard/" + comp.id) + "</span><div style=\"margin-top:10px\"><button class=\"btn2 copy\" type=\"button\" data-link=\"" + esc(origin + "/leaderboard/" + comp.id) + "\">Copier le classement public</button></div></div>" +
-      "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/status\" style=\"margin-top:12px\"><div class=\"theme-select-row\"><div><label>Statut</label><select name=\"status\"><option value=\"active\"" + (comp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (comp.status==="paused"?" selected":"") + ">En pause</option><option value=\"ended\"" + (comp.status==="ended"?" selected":"") + ">Terminée</option><option value=\"draft\"" + (comp.status==="draft"?" selected":"") + ">Brouillon</option></select></div><div><label>Palette</label><select name=\"theme\"><option value=\"blue\"" + ((comp.theme||"blue")==="blue"?" selected":"") + ">Bleu premium</option><option value=\"amber\"" + (comp.theme==="amber"?" selected":"") + ">Ambre premium</option><option value=\"red\"" + (comp.theme==="red"?" selected":"") + ">Rouge profond</option><option value=\"mono\"" + (comp.theme==="mono"?" selected":"") + ">Monochrome</option></select></div></div><div class=\"actions\" style=\"margin-top:10px\"><button class=\"btn\" type=\"submit\">Enregistrer</button><a class=\"btn2\" href=\"/api/competition/" + encodeURIComponent(comp.id) + "/export.csv\">Exporter CSV</a></div></form>" +
-    "</div>";
-
-  const fresh = newCode ? rows.find(r => r.code === newCode) : null;
-  const success = (!publicMode && fresh) ?
-    "<div class=\"success\"><div><b>Participant ajouté : " + esc(fresh.name) + "</b><div class=\"small muted\">Son lien personnel est prêt à être envoyé.</div></div><div class=\"link-actions\"><button class=\"btn2 copy\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\">Copier maintenant</button><button class=\"btn2 share\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\" data-name=\"" + esc(fresh.name) + "\">Partager</button></div></div>" : "";
-
-  const linksPanel = publicMode ? "" :
-    "<div class=\"card span12 section-anchor\" id=\"links\"><div class=\"section-title\"><div><h2>Liens participants</h2><div class=\"subnav-note\">Chaque personne possède son propre lien. C’est celui-ci qu’il faut lui envoyer.</div></div><input class=\"searchbox\" id=\"participantSearch\" placeholder=\"Rechercher un participant…\"></div>" +
-    "<div class=\"links-grid\" id=\"participantLinks\">" + participantLinksHtml(rows, origin) + "</div></div>";
-
   const theme = ["blue","amber","red","mono"].includes(comp.theme) ? comp.theme : "blue";
-  const body = "<div class=\"theme theme-" + theme + "\">" + topNav() +
-    "<div class=\"quickbar\"><a class=\"pill primary\" href=\"#links\">Liens participants</a><a class=\"pill\" href=\"#ranking\">Classement</a><a class=\"pill\" href=\"#live\">Graphique live</a>" + (publicMode ? "" : "<a class=\"pill\" href=\"#add\">Ajouter</a>") + "</div>" +
-    success +
-    "<section class=\"hero\" data-ghost=\"LIVE\"><div class=\"hero-row\"><div><div class=\"eyebrow\">" + (publicMode ? "Classement public" : "Gestion de compétition") + "</div><h1>" + esc(comp.name) + "</h1><p>" +
-      (comp.prize ? "Récompense : " + esc(comp.prize) + ". " : "") +
-      "Le classement se met à jour automatiquement à partir de l’activité des liens participants.</p></div><div class=\"hero-side\"><div class=\"small\" style=\"color:#aaa\">Statut</div><strong>" + esc(comp.status) + "</strong><div class=\"small\" style=\"color:#aaa;margin-top:8px\">" + rows.length + " participants</div></div></div></section>" +
-    "<div class=\"grid\">" +
+  const endpoint = "/api/competition/" + encodeURIComponent(comp.id) + "/stats";
+  const id = encodeURIComponent(comp.id);
+
+  const statsHtml =
+    "<div class=\"grid\" style=\"margin-bottom:14px\">" +
       "<div class=\"card span3 stat\"><div class=\"label\">Participants</div><div class=\"num\" id=\"statParticipants\">" + totals.participants + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">Clics</div><div class=\"num\" id=\"statClicks\">" + totals.clicks + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">Uniques</div><div class=\"num\" id=\"statUnique\">" + totals.unique + "</div></div>" +
       "<div class=\"card span3 stat\"><div class=\"label\">En tête</div><div class=\"num\" id=\"statLeader\" style=\"font-size:20px\">" + esc(leader ? leader.name : "—") + "</div></div>" +
-      linksPanel +
-      "<div class=\"card span12\"><div class=\"section-title\"><div><h2>Podium actuel</h2><div class=\"subnav-note\">Les trois meilleures positions au dernier rafraîchissement.</div></div></div>" + podiumHtml(rows) + "</div>" +
-      "<div class=\"card span12 section-anchor\" id=\"live\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>" +
-      "<div class=\"card span12 section-anchor\" id=\"ranking\"><div class=\"section-title\"><h2>Classement</h2><span class=\"small muted\">1er → dernier · score basé sur les visiteurs uniques</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th>" + (publicMode ? "" : "<th>Action</th>") + "</tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, publicMode) + "</tbody></table></div></div>" +
-      adminTools +
-      "<div class=\"card span12\"><div class=\"notice\"><b>À savoir</b> — « Visiteurs uniques » mesure les personnes distinctes détectées sur le lien de suivi. WhatsApp ne fournit pas à ce tracker une confirmation automatique de l’adhésion au groupe. Pour une compétition basée sur les membres réellement rejoints, il faudra ajouter une étape de validation.</div></div>" +
-    "</div></div>";
+    "</div>";
+
+  const hero =
+    "<section class=\"hero\" data-ghost=\"LIVE\"><div class=\"hero-row\"><div style=\"display:flex;gap:16px;align-items:center;min-width:0\">" +
+      profileAvatarHtml(profile, comp.name, "hero-avatar") +
+      "<div style=\"min-width:0\"><div class=\"eyebrow\">" + (publicMode ? "Classement public" : "Gestion de compétition") + "</div><h1 style=\"margin-top:8px\">" + esc(comp.name) + "</h1><p>" +
+      (comp.prize ? "Récompense : " + esc(comp.prize) + ". " : "") +
+      "Suivi des performances et des positions en temps réel.</p></div></div>" +
+      "<div class=\"hero-side\"><div class=\"small\" style=\"color:#aaa\">Statut</div><strong>" + esc(comp.status) + "</strong><div class=\"small\" style=\"color:#aaa;margin-top:8px\">" + rows.length + " participants</div><div class=\"accent-chip\"><i></i>" + esc(theme) + "</div></div></div></section>";
+
+  const fresh = newCode ? rows.find(r => r.code === newCode) : null;
+  const success = fresh ?
+    "<div class=\"success\"><div><b>Participant ajouté : " + esc(fresh.name) + "</b><div class=\"small muted\">Son lien personnel est prêt à être envoyé.</div></div><div class=\"link-actions\"><button class=\"btn2 copy\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\">Copier maintenant</button><button class=\"btn2 share\" type=\"button\" data-link=\"" + esc(origin + fresh.link) + "\" data-name=\"" + esc(fresh.name) + "\">Partager</button></div></div>" : "";
+
+  let content = "";
+
+  if (publicMode) {
+    content = hero + statsHtml +
+      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Podium actuel</h2><div class=\"subnav-note\">Les trois premières positions.</div></div></div>" + podiumHtml(rows) + "</div>" +
+      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><h2>Classement</h2><div class=\"live\"><span class=\"pulse\"></span>mise à jour toutes les 5 s</div></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, true) + "</tbody></table></div></div>" +
+      "<div class=\"card\"><div class=\"section-title\"><h2>Position en temps réel</h2><span id=\"updatedAt\" class=\"small muted\"></span></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>";
+  } else if (view === "overview") {
+    const quick =
+      "<div class=\"quick-actions\">" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/links\"><b>Liens participants</b><span>Copier et partager les liens personnels.</span></a>" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/ranking\"><b>Classement</b><span>Voir le classement complet du premier au dernier.</span></a>" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/live\"><b>Graphique live</b><span>Suivre la position des participants.</span></a>" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/participants\"><b>Participants</b><span>Ajouter, gérer ou supprimer des participants.</span></a>" +
+      "</div>";
+    content = hero + statsHtml +
+      "<div class=\"overview-grid\">" +
+        "<div class=\"card content-card\"><div class=\"section-title\"><div><h2>Podium actuel</h2><div class=\"subnav-note\">Vue rapide des meilleurs participants.</div></div><a class=\"btn2\" href=\"/c/" + id + "/ranking\">Voir tout</a></div>" + podiumHtml(rows) + "</div>" +
+        "<div class=\"card content-card\"><div class=\"section-title\"><h2>Accès rapides</h2></div>" + quick + "</div>" +
+      "</div>";
+  } else if (view === "links") {
+    content = pageTitleHtml("Liens participants","Chaque participant dispose d’un lien individuel à lui envoyer.", "<a class=\"btn\" href=\"/c/" + id + "/participants\">+ Ajouter un participant</a>") +
+      success +
+      "<div class=\"card\"><div class=\"section-title\"><div><h2>Liens personnels</h2><div class=\"subnav-note\">Copie, partage ou teste un lien sans chercher dans le tableau.</div></div><input class=\"searchbox\" id=\"participantSearch\" placeholder=\"Rechercher un participant…\"></div><div class=\"links-grid\" id=\"participantLinks\">" + participantLinksHtml(rows, origin) + "</div></div>";
+  } else if (view === "ranking") {
+    content = pageTitleHtml("Classement","Classement complet, du premier au dernier.", "<a class=\"btn2\" target=\"_blank\" href=\"/leaderboard/" + id + "\">Ouvrir la page publique</a>") +
+      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><h2>Podium actuel</h2><div class=\"live\"><span class=\"pulse\"></span>live</div></div>" + podiumHtml(rows) + "</div>" +
+      "<div class=\"card\"><div class=\"section-title\"><h2>Classement détaillé</h2><span class=\"small muted\">score basé sur les visiteurs uniques</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th><th>Action</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, false) + "</tbody></table></div></div>";
+  } else if (view === "live") {
+    content = pageTitleHtml("Graphique live","Visualise la position actuelle de tous les participants.") +
+      statsHtml +
+      "<div class=\"card\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>";
+  } else if (view === "participants") {
+    content = pageTitleHtml("Participants","Ajoute les participants individuellement ou en masse.") +
+      success +
+      "<div class=\"grid\" style=\"margin-bottom:14px\">" +
+        "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajouter un participant</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/add\"><div class=\"form-grid\"><div><label>Nom</label><input name=\"name\" placeholder=\"Nom du participant\" required></div><div><label>Code (facultatif)</label><input name=\"code\" placeholder=\"Généré automatiquement\"></div><div class=\"full\"><button class=\"btn\" style=\"width:100%\" type=\"submit\">Ajouter le participant</button></div></div></form></div>" +
+        "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajout multiple</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/bulk\"><label>Un nom par ligne</label><textarea name=\"names\" placeholder=\"Aron&#10;Tony&#10;Marc&#10;Sarah\"></textarea><button class=\"btn2\" style=\"width:100%;margin-top:9px\" type=\"submit\">Ajouter toute la liste</button></form></div>" +
+      "</div>" +
+      "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + rows.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Clics</th><th>Uniques</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(rows, comp) + "</tbody></table></div></div>";
+  } else if (view === "settings") {
+    const currentProfile = profileAvatarHtml(profile, comp.name);
+    content = pageTitleHtml("Paramètres","Identité, photo, palette et statut de cette compétition.") +
+      "<div class=\"grid\">" +
+        "<div class=\"card span5\"><div class=\"section-title\"><h2>Photo de la compétition</h2></div><div class=\"profile-settings\"><div id=\"profilePreviewWrap\">" +
+          (profile ? "<img class=\"profile-preview\" src=\"" + esc(profile) + "\" alt=\"Photo actuelle\">" : "<div class=\"profile-preview\">" + esc(comp.name.charAt(0).toUpperCase()) + "</div>") +
+          "</div><div><div class=\"upload-zone\"><label>Choisir une image</label><input id=\"profileFile\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\"><div class=\"footer-note\">L’image sera automatiquement recadrée et compressée en carré.</div></div><form id=\"profileForm\" method=\"post\" action=\"/api/competition/" + id + "/profile\" style=\"margin-top:10px\"><input id=\"profileData\" type=\"hidden\" name=\"profileData\"><button class=\"btn\" type=\"submit\">Enregistrer la photo</button></form>" +
+          (profile ? "<form method=\"post\" action=\"/api/competition/" + id + "/profile\" style=\"margin-top:8px\"><input type=\"hidden\" name=\"remove\" value=\"1\"><button class=\"danger\" type=\"submit\">Retirer la photo</button></form>" : "") +
+        "</div></div></div>" +
+        "<div class=\"card span7\"><div class=\"section-title\"><h2>Configuration</h2><span class=\"status\"><span class=\"theme-swatch\"></span>" + esc(comp.status) + "</span></div><form method=\"post\" action=\"/api/competition/" + id + "/status\"><div class=\"form-grid\"><div><label>Statut</label><select name=\"status\"><option value=\"active\"" + (comp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (comp.status==="paused"?" selected":"") + ">En pause</option><option value=\"ended\"" + (comp.status==="ended"?" selected":"") + ">Terminée</option><option value=\"draft\"" + (comp.status==="draft"?" selected":"") + ">Brouillon</option></select></div><div><label>Palette</label><select name=\"theme\"><option value=\"blue\"" + (theme==="blue"?" selected":"") + ">Bleu premium</option><option value=\"amber\"" + (theme==="amber"?" selected":"") + ">Ambre premium</option><option value=\"red\"" + (theme==="red"?" selected":"") + ">Rouge profond</option><option value=\"mono\"" + (theme==="mono"?" selected":"") + ">Monochrome</option></select></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer</button></div></div></form><hr style=\"border:0;border-top:1px solid var(--line);margin:18px 0\"><div class=\"notice\"><b>Lien public du classement</b><br><span class=\"muted\">" + esc(origin + "/leaderboard/" + comp.id) + "</span><div class=\"actions\" style=\"margin-top:10px\"><button class=\"btn2 copy\" type=\"button\" data-link=\"" + esc(origin + "/leaderboard/" + comp.id) + "\">Copier</button><a class=\"btn2\" target=\"_blank\" href=\"/leaderboard/" + id + "\">Ouvrir</a><a class=\"btn2\" href=\"/api/competition/" + id + "/export.csv\">Exporter CSV</a></div></div></div>" +
+      "</div>";
+  } else {
+    content = pageTitleHtml("Page introuvable","Cette rubrique n’existe pas.");
+  }
+
+  const body = publicMode
+    ? "<div class=\"theme theme-" + theme + "\">" + topNav() + "<div class=\"view-fade\">" + content + "</div></div>"
+    : "<div class=\"theme theme-" + theme + "\">" + topNav() + "<div class=\"app-shell\">" + competitionSidebar(comp, view, profile) + "<main class=\"app-main view-fade\">" + content + "</main></div></div>";
 
   const script =
-    "const endpoint=" + JSON.stringify(endpoint) + ";" +
-    "const origin=" + JSON.stringify(origin) + ";" +
-    "const publicMode=" + JSON.stringify(publicMode) + ";" +
-    "let previousRanks={};" +
-    "document.addEventListener('click',async e=>{const copy=e.target.closest('.copy');if(copy){const v=copy.dataset.link;try{await navigator.clipboard.writeText(v);const old=copy.textContent;copy.textContent='Copié ✓';setTimeout(()=>copy.textContent=old,1200)}catch{prompt('Copie ce lien :',v)}return}const share=e.target.closest('.share');if(share){const v=share.dataset.link;const name=share.dataset.name||'participant';if(navigator.share){try{await navigator.share({title:'Lien de '+name,text:'Voici ton lien personnel pour la compétition :',url:v})}catch{}}else{try{await navigator.clipboard.writeText(v);alert('Lien copié')}catch{prompt('Copie ce lien :',v)}}}});" +
+    "const endpoint=" + JSON.stringify(endpoint) + ";const origin=" + JSON.stringify(origin) + ";const publicMode=" + JSON.stringify(publicMode) + ";" +
+    "document.addEventListener('click',async e=>{const copy=e.target.closest('.copy');if(copy){let v=copy.dataset.link||'';if(v.startsWith('/'))v=origin+v;try{await navigator.clipboard.writeText(v);const old=copy.textContent;copy.textContent='Copié ✓';setTimeout(()=>copy.textContent=old,1200)}catch{prompt('Copie ce lien :',v)}return}const share=e.target.closest('.share');if(share){let v=share.dataset.link||'';if(v.startsWith('/'))v=origin+v;const name=share.dataset.name||'participant';if(navigator.share){try{await navigator.share({title:'Lien de '+name,text:'Voici ton lien personnel pour la compétition :',url:v})}catch{}}else{try{await navigator.clipboard.writeText(v);alert('Lien copié')}catch{prompt('Copie ce lien :',v)}}}});" +
     "const search=document.getElementById('participantSearch');if(search){search.addEventListener('input',()=>{const q=search.value.toLowerCase().trim();document.querySelectorAll('.participant-link-card').forEach(x=>x.style.display=x.dataset.search.includes(q)?'':'none')})}" +
     "function el(t,c,txt){const x=document.createElement(t);if(c)x.className=c;if(txt!==undefined)x.textContent=txt;return x}" +
-    "function render(data){" +
-      "const rows=data.participants||[];document.getElementById('statParticipants').textContent=rows.length;document.getElementById('statClicks').textContent=data.totals.clicks;document.getElementById('statUnique').textContent=data.totals.unique;document.getElementById('statLeader').textContent=rows[0]?rows[0].name:'—';" +
-      "const body=document.getElementById('leaderboardBody');body.textContent='';rows.forEach(r=>{const tr=document.createElement('tr');const old=previousRanks[r.code];" +
-        "const tdRank=el('td','rank'+(r.rank===1?' one':''));tdRank.textContent=r.rank;if(old&&old!==r.rank){const d=el('span','delta '+(r.rank<old?'up':'down'),r.rank<old?'↑':'↓');tdRank.appendChild(d)}tr.appendChild(tdRank);" +
-        "const tdP=el('td');tdP.appendChild(el('div','person',r.name));tdP.appendChild(el('div','code',r.code));tr.appendChild(tdP);" +
-        "tr.appendChild(el('td','',String(r.clicks)));const u=el('td');u.appendChild(el('b','',String(r.unique)));tr.appendChild(u);tr.appendChild(el('td','',r.clicks?Math.round(r.unique/r.clicks*100)+'%':'0%'));" +
-        "const tdL=el('td');const ac=el('div','actions');const cp=el('button','iconbtn copy','Copier');cp.type='button';cp.dataset.link=origin+r.link;const op=el('a','iconbtn','Ouvrir');op.href=origin+r.link;op.target='_blank';ac.append(cp,op);tdL.appendChild(ac);tr.appendChild(tdL);" +
-        "if(!publicMode){const td=el('td');const f=document.createElement('form');f.method='post';f.action='/api/competition/'+encodeURIComponent(data.competition.id)+'/delete-participant';const i=document.createElement('input');i.type='hidden';i.name='code';i.value=r.code;const b=el('button','danger','Supprimer');b.type='submit';f.append(i,b);td.appendChild(f);tr.appendChild(td)}body.appendChild(tr)});" +
-      "previousRanks=Object.fromEntries(rows.map(r=>[r.code,r.rank]));" +
-      "const chart=document.getElementById('liveChart');chart.textContent='';const max=Math.max(1,...rows.map(r=>r.unique));if(!rows.length){chart.appendChild(el('div','empty','Le graphique apparaîtra dès les premiers clics.'))}else rows.forEach(r=>{const row=el('div','bar-row');row.title=r.name+' · '+r.unique+' visiteurs uniques';row.appendChild(el('div','bar-name',r.name));const track=el('div','track');const fill=el('div','fill');fill.style.width=Math.max(2,Math.round(r.unique/max*100))+'%';track.appendChild(fill);row.appendChild(track);row.appendChild(el('div','bar-value',String(r.unique)));chart.appendChild(row)});" +
-      "const links=document.getElementById('participantLinks');if(links){links.textContent='';rows.forEach(r=>{const card=el('article','link-card participant-link-card');card.dataset.search=(r.name+' '+r.code).toLowerCase();const head=el('div','link-head');const left=el('div');left.append(el('div','link-name',r.name),el('div','code',r.code));head.append(left,el('div','link-rank','#'+r.rank));card.appendChild(head);const url=origin+r.link;const urlBox=el('div','link-url',url);urlBox.title=url;card.appendChild(urlBox);const acts=el('div','link-actions');const cp=el('button','btn copy','Copier le lien');cp.type='button';cp.dataset.link=url;const sh=el('button','btn2 share','Partager');sh.type='button';sh.dataset.link=url;sh.dataset.name=r.name;const op=el('a','btn2','Tester');op.href=url;op.target='_blank';acts.append(cp,sh,op);card.appendChild(acts);links.appendChild(card)})}" +
-      "document.getElementById('updatedAt').textContent='· '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});" +
-    "}" +
-    "async function refresh(){try{const r=await fetch(endpoint,{cache:'no-store'});if(r.ok)render(await r.json())}catch{}}" +
-    "document.querySelectorAll('.copy').forEach(()=>{});setInterval(refresh,5000);setTimeout(refresh,900);";
+    "function render(data){const rows=data.participants||[];const a=document.getElementById('statParticipants'),b=document.getElementById('statClicks'),u=document.getElementById('statUnique'),l=document.getElementById('statLeader');if(a)a.textContent=rows.length;if(b)b.textContent=data.totals.clicks;if(u)u.textContent=data.totals.unique;if(l)l.textContent=rows[0]?rows[0].name:'—';" +
+      "const body=document.getElementById('leaderboardBody');if(body){body.textContent='';rows.forEach(r=>{const tr=document.createElement('tr');const tdRank=el('td','rank'+(r.rank===1?' one':''),String(r.rank));tr.appendChild(tdRank);const tdP=el('td');tdP.append(el('div','person',r.name),el('div','code',r.code));tr.appendChild(tdP);tr.appendChild(el('td','',String(r.clicks)));const tdU=el('td');tdU.appendChild(el('b','',String(r.unique)));tr.appendChild(tdU);tr.appendChild(el('td','',r.clicks?Math.round(r.unique/r.clicks*100)+'%':'0%'));const tdL=el('td');const ac=el('div','actions');const cp=el('button','iconbtn copy','Copier');cp.type='button';cp.dataset.link=origin+r.link;const op=el('a','iconbtn','Ouvrir');op.href=origin+r.link;op.target='_blank';ac.append(cp,op);tdL.appendChild(ac);tr.appendChild(tdL);if(!publicMode){const td=el('td');const f=document.createElement('form');f.method='post';f.action='/api/competition/'+encodeURIComponent(data.competition.id)+'/delete-participant';const i=document.createElement('input');i.type='hidden';i.name='code';i.value=r.code;const bt=el('button','danger','Supprimer');bt.type='submit';f.append(i,bt);td.appendChild(f);tr.appendChild(td)}body.appendChild(tr)})}" +
+      "const chart=document.getElementById('liveChart');if(chart){chart.textContent='';const max=Math.max(1,...rows.map(r=>r.unique));if(!rows.length){chart.appendChild(el('div','empty','Le graphique apparaîtra dès les premiers clics.'))}else rows.forEach(r=>{const row=el('div','bar-row');row.appendChild(el('div','bar-name',r.name));const track=el('div','track');const fill=el('div','fill');fill.style.width=Math.max(2,Math.round(r.unique/max*100))+'%';track.appendChild(fill);row.append(track,el('div','bar-value',String(r.unique)));chart.appendChild(row)})}const t=document.getElementById('updatedAt');if(t)t.textContent='· '+new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit',second:'2-digit'});}" +
+    "async function refresh(){try{const r=await fetch(endpoint,{cache:'no-store'});if(r.ok)render(await r.json())}catch{}}if(document.getElementById('liveChart')||document.getElementById('leaderboardBody')){setInterval(refresh,5000);setTimeout(refresh,900)}" +
+    "const pf=document.getElementById('profileFile');if(pf){pf.addEventListener('change',()=>{const file=pf.files&&pf.files[0];if(!file)return;if(file.size>8000000){alert('Image trop lourde. Choisis une image de moins de 8 Mo.');pf.value='';return}const reader=new FileReader();reader.onload=()=>{const img=new Image();img.onload=()=>{const size=320;const canvas=document.createElement('canvas');canvas.width=size;canvas.height=size;const ctx=canvas.getContext('2d');const s=Math.min(img.width,img.height);const sx=(img.width-s)/2,sy=(img.height-s)/2;ctx.drawImage(img,sx,sy,s,s,0,0,size,size);const data=canvas.toDataURL('image/jpeg',0.78);document.getElementById('profileData').value=data;const wrap=document.getElementById('profilePreviewWrap');wrap.textContent='';const im=document.createElement('img');im.className='profile-preview';im.src=data;wrap.appendChild(im)};img.src=reader.result};reader.readAsDataURL(file)})}" ;
 
-  return pageShell(comp.name + " — Classement", body, script);
+  return pageShell(comp.name + " — " + (publicMode ? "Classement" : view), body, script);
 }
 
 async function findCompetition(id) {
