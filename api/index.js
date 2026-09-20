@@ -681,7 +681,8 @@ export default async function handler(req, res) {
         if (!participants.some(p => p.code === code)) {
           return send(res, 404, "Participant introuvable", "text/plain; charset=utf-8");
         }
-        await redis(["HINCRBY", statsKey(id, code), "points", amount]);
+        const newTotal = Number(await redis(["HINCRBY", statsKey(id, code), "points", amount]));
+        if (newTotal < 0) await redis(["HSET", statsKey(id, code), "points", "0"]);
         await redis(["HSET", statsKey(id, code), "lastReason", reason || "Ajustement manuel", "updatedAt", new Date().toISOString()]);
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
