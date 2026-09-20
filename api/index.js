@@ -382,6 +382,7 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
   const profile = await getProfile(comp.id);
   const totals = {
     participants: rows.length,
+    points: rows.reduce((s,r) => s + r.points, 0),
     clicks: rows.reduce((s,r) => s + r.clicks, 0),
     unique: rows.reduce((s,r) => s + r.unique, 0)
   };
@@ -391,11 +392,12 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
   const id = encodeURIComponent(comp.id);
 
   const statsHtml =
-    "<div class=\"grid\" style=\"margin-bottom:14px\">" +
-      "<div class=\"card span3 stat\"><div class=\"label\">Participants</div><div class=\"num\" id=\"statParticipants\">" + totals.participants + "</div></div>" +
-      "<div class=\"card span3 stat\"><div class=\"label\">Clics</div><div class=\"num\" id=\"statClicks\">" + totals.clicks + "</div></div>" +
-      "<div class=\"card span3 stat\"><div class=\"label\">Uniques</div><div class=\"num\" id=\"statUnique\">" + totals.unique + "</div></div>" +
-      "<div class=\"card span3 stat\"><div class=\"label\">En tête</div><div class=\"num\" id=\"statLeader\" style=\"font-size:20px\">" + esc(leader ? leader.name : "—") + "</div></div>" +
+    "<div class=\"metric-grid\">" +
+      "<div class=\"card stat\"><div class=\"label\">Participants</div><div class=\"num\" id=\"statParticipants\">" + totals.participants + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Points attribués</div><div class=\"num\" id=\"statPoints\">" + totals.points + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Clics</div><div class=\"num\" id=\"statClicks\">" + totals.clicks + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Uniques</div><div class=\"num\" id=\"statUnique\">" + totals.unique + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">En tête</div><div class=\"num\" id=\"statLeader\" style=\"font-size:20px\">" + esc(leader ? leader.name : "—") + "</div></div>" +
     "</div>";
 
   const hero =
@@ -413,10 +415,21 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
   let content = "";
 
   if (publicMode) {
-    content = hero + statsHtml +
-      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Podium actuel</h2><div class=\"subnav-note\">Les trois premières positions.</div></div></div>" + podiumHtml(rows) + "</div>" +
-      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><h2>Classement</h2><div class=\"live\"><span class=\"pulse\"></span>mise à jour toutes les 5 s</div></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, true) + "</tbody></table></div></div>" +
-      "<div class=\"card\"><div class=\"section-title\"><h2>Position en temps réel</h2><span id=\"updatedAt\" class=\"small muted\"></span></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>";
+    const publicHeader =
+      "<div class=\"public-header\"><div class=\"public-brand\">" + profileAvatarHtml(profile, comp.name, "hero-avatar") +
+        "<div><div class=\"eyebrow\">CLASSEMENT PUBLIC · LIVE</div><h1>" + esc(comp.name) + "</h1><p>Classement principal basé sur les points attribués.</p></div></div>" +
+        "<div class=\"public-prize\"><span class=\"status\" style=\"background:#ffffff12;color:#fff;border-color:#ffffff20\"><span class=\"dot active\"></span>" + esc(comp.status) + "</span>" +
+        (comp.prize ? "<b style=\"margin-top:8px\">Récompense : " + esc(comp.prize) + "</b>" : "") + "</div></div>";
+    const publicKpis =
+      "<div class=\"public-kpis\"><div class=\"public-kpi\"><span>Participants</span><b id=\"statParticipants\">" + totals.participants + "</b></div>" +
+      "<div class=\"public-kpi\"><span>Points</span><b id=\"statPoints\">" + totals.points + "</b></div>" +
+      "<div class=\"public-kpi\"><span>Clics</span><b id=\"statClicks\">" + totals.clicks + "</b></div>" +
+      "<div class=\"public-kpi\"><span>Uniques</span><b id=\"statUnique\">" + totals.unique + "</b></div></div>";
+    content = publicHeader + publicKpis +
+      "<div class=\"public-board\"><div class=\"public-panel\"><div class=\"section-title\"><div><h2>Classement général</h2><div class=\"subnav-note\">Du premier au dernier · priorité aux points</div></div><div class=\"live\"><span class=\"pulse\"></span><span id=\"updatedAt\">live</span></div></div>" +
+        "<div class=\"table-wrap\"><table class=\"public-table\"><thead><tr><th>#</th><th>Participant</th><th>Points</th><th>Clics</th><th>Uniques</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, true) + "</tbody></table></div>" +
+        "<div class=\"capture-note\">Les points sont attribués par l’administrateur après validation des actions (ex. souscription).</div></div>" +
+      "<div class=\"public-side\"><div class=\"public-panel\"><h3>Podium</h3>" + podiumHtml(rows) + "</div><div class=\"public-panel\"><div class=\"section-title\"><h2>Écart de points</h2></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div></div></div>";
   } else if (view === "overview") {
     const quick =
       "<div class=\"quick-actions\">" +
@@ -437,7 +450,7 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
   } else if (view === "ranking") {
     content = pageTitleHtml("Classement","Classement complet, du premier au dernier.", "<a class=\"btn2\" target=\"_blank\" href=\"/leaderboard/" + id + "\">Ouvrir la page publique</a>") +
       "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><h2>Podium actuel</h2><div class=\"live\"><span class=\"pulse\"></span>live</div></div>" + podiumHtml(rows) + "</div>" +
-      "<div class=\"card\"><div class=\"section-title\"><h2>Classement détaillé</h2><span class=\"small muted\">score basé sur les visiteurs uniques</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th><th>Action</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, false) + "</tbody></table></div></div>";
+      "<div class=\"card\"><div class=\"section-title\"><h2>Classement détaillé</h2><span class=\"small muted\">priorité aux points · uniques et clics départagent les égalités</span></div><div class=\"table-wrap\"><table><thead><tr><th>#</th><th>Participant</th><th>Points</th><th>Clics</th><th>Uniques</th><th>Taux unique</th><th>Lien</th><th>Action</th></tr></thead><tbody id=\"leaderboardBody\">" + leaderboardRowsHtml(rows, origin, comp, false) + "</tbody></table></div></div>";
   } else if (view === "live") {
     content = pageTitleHtml("Graphique live","Visualise la position actuelle de tous les participants.") +
       statsHtml +
@@ -449,7 +462,8 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
         "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajouter un participant</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/add\"><div class=\"form-grid\"><div><label>Nom</label><input name=\"name\" placeholder=\"Nom du participant\" required></div><div><label>Code (facultatif)</label><input name=\"code\" placeholder=\"Généré automatiquement\"></div><div class=\"full\"><button class=\"btn\" style=\"width:100%\" type=\"submit\">Ajouter le participant</button></div></div></form></div>" +
         "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajout multiple</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/bulk\"><label>Un nom par ligne</label><textarea name=\"names\" placeholder=\"Aron&#10;Tony&#10;Marc&#10;Sarah\"></textarea><button class=\"btn2\" style=\"width:100%;margin-top:9px\" type=\"submit\">Ajouter toute la liste</button></form></div>" +
       "</div>" +
-      "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + rows.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Clics</th><th>Uniques</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(rows, comp) + "</tbody></table></div></div>";
+      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Attribuer des points</h2><div class=\"subnav-note\">+5, +10, +20, +50 ou une valeur personnalisée. Une valeur négative permet de corriger une erreur.</div></div></div>" + pointsCardsHtml(rows, comp) + "</div>" +
+      "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + rows.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Points</th><th>Clics</th><th>Uniques</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(rows, comp) + "</tbody></table></div></div>";
   } else if (view === "settings") {
     const currentProfile = profileAvatarHtml(profile, comp.name);
     content = pageTitleHtml("Paramètres","Identité, photo, palette et statut de cette compétition.") +
@@ -466,7 +480,7 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
   }
 
   const body = publicMode
-    ? "<div class=\"theme theme-" + theme + "\">" + topNav() + "<div class=\"view-fade\">" + content + "</div></div>"
+    ? "<div class=\"theme theme-" + theme + " public-shell\"><div class=\"view-fade\">" + content + "</div></div>"
     : "<div class=\"theme theme-" + theme + "\">" + topNav() + "<div class=\"app-shell\">" + competitionSidebar(comp, view, profile) + "<main class=\"app-main view-fade\">" + content + "</main></div></div>";
 
   const script =
