@@ -490,14 +490,14 @@ function participantLoginPage(message = "") {
 
 async function participantCompetitionsPage(session) {
   const result=await query(
-    \`SELECT c.id,c.name,c.status,c.ends_at,cp.status AS membership_status,
+    `SELECT c.id,c.name,c.status,c.ends_at,cp.status AS membership_status,
             cp.total_points_cache,cp.rank_cache,cp.referral_code
      FROM competition_participants cp
      JOIN competitions c ON c.id=cp.competition_id
      WHERE cp.participant_id=$1
      ORDER BY
        CASE c.status WHEN 'active' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END,
-       cp.joined_at DESC\`,
+       cp.joined_at DESC`,
     [session.participant_id]
   );
 
@@ -1185,13 +1185,13 @@ async function adminRewardsContent(comp) {
     getCompetitionConfig(comp.id),
     listCompetitionCoupons(comp.id),
     query(
-      \`SELECT cp.participant_id,p.pseudonym,cp.rank_cache,cp.total_points_cache
+      `SELECT cp.participant_id,p.pseudonym,cp.rank_cache,cp.total_points_cache
        FROM competition_participants cp
        JOIN participants p ON p.id=cp.participant_id
        WHERE cp.competition_id=$1
          AND cp.rank_cache IS NOT NULL
          AND cp.rank_cache <= (SELECT winner_count FROM competitions WHERE id=$1)
-       ORDER BY cp.rank_cache ASC\`,
+       ORDER BY cp.rank_cache ASC`,
       [comp.id]
     )
   ]);
