@@ -132,6 +132,33 @@ function hiddenInputsFromBody(body, names) {
 }
 
 
+async function logAdminAction({
+  action,
+  entityType,
+  entityId,
+  description,
+  metadata={}
+}) {
+  try {
+    await query(
+      `INSERT INTO admin_audit_logs
+       (id,admin_id,action,entity_type,entity_id,description,metadata)
+       VALUES ($1,'admin',$2,$3,$4,$5,$6::jsonb)`,
+      [
+        "audit_"+randomBytes(12).toString("hex"),
+        String(action||"admin_action"),
+        String(entityType||"entity"),
+        entityId||null,
+        String(description||"").slice(0,1000),
+        JSON.stringify(metadata||{})
+      ]
+    );
+  } catch(error) {
+    console.error("admin-audit-log:",error);
+  }
+}
+
+
 async function getCompetitions() {
   return await getJSON(competitionsKey(), []);
 }
