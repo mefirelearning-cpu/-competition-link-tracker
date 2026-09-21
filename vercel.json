@@ -139,6 +139,10 @@
     {
       "source": "/preview/:id",
       "destination": "/api/index?path=preview/:id"
+    },
+    {
+      "source": "/participant/switch",
+      "destination": "/api/index?path=participant/switch"
     }
   ]
 }
