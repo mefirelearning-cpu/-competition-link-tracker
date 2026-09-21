@@ -103,6 +103,10 @@
     {
       "source": "/api/competition/:id/burst-delete",
       "destination": "/api/index?path=api/competition/:id/burst-delete"
+    },
+    {
+      "source": "/api/competition/:id/:action",
+      "destination": "/api/index?path=api/competition/:id/:action"
     }
   ]
 }
