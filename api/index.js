@@ -9,7 +9,7 @@ import { query } from "../lib/db.js";
 import { getCompetitionConfig, updateCompetitionConfig, resizeCompetitionDays, ensureCompetitionLifecycle } from "../lib/competition-config.js";
 import { getFraudSettings, updateFraudSettings, listFraudFlags, resolveFraudFlag } from "../lib/fraud.js";
 import { createAnnouncement, listParticipantNotifications, markNotificationRead } from "../lib/notifications.js";
-import { listPrizes, addPrize, listRewardTiers, addRewardTier, freezeFinalRanking, selectPrize, generateRewardCoupons, participantRewards } from "../lib/rewards.js";
+import { listPrizes, addPrize, listRewardTiers, addRewardTier, freezeFinalRanking, selectPrize, generateRewardCoupons, participantRewards, listCompetitionCoupons, markCouponUsed } from "../lib/rewards.js";
 import { createInterest, listProspects, confirmLead, confirmSale, rejectInterest, participantConversionStats } from "../lib/conversions.js";
 import { listCompetitionDays, getActiveDay, listDayMissions, createCompetitionDay, createMission, claimDailyReward, addStreakRule, submitMissionCompletion, listMissionCompletions, reviewMissionCompletion, duplicateCompetitionDay, deleteCompetitionDay, moveCompetitionDay } from "../lib/competition-days.js";
 import { listCampaigns, getCampaignBySlug, createCampaign, updateCampaign, updateCampaignStatus, deleteCampaign, recordCampaignShare, getCampaignStats } from "../lib/marketing.js";
@@ -1050,15 +1050,52 @@ async function adminProspectsContent(comp) {
 
 async function adminRewardsContent(comp) {
   const id = encodeURIComponent(comp.id);
-  const [prizes,tiers,config] = await Promise.all([listPrizes(comp.id),listRewardTiers(comp.id),getCompetitionConfig(comp.id)]);
-  const prizeRows = prizes.length ? prizes.map(p=>"<tr><td>" + esc(p.name) + "</td><td>" + esc(p.duration_text||"") + "</td><td>" + esc(p.status) + "</td><td>" + esc(p.chosen_by_name||"—") + "</td></tr>").join("") : "<tr><td colspan=\"4\" class=\"empty\">Aucun lot.</td></tr>";
-  const tierRows = tiers.length ? tiers.map(t=>"<tr><td>" + Number(t.min_points) + "</td><td>" + (t.max_points===null?"∞":Number(t.max_points)) + "</td><td>" + esc(t.reward_type) + "</td><td>" + Number(t.reward_value) + "</td><td>" + (t.validity_days||"—") + "</td></tr>").join("") : "<tr><td colspan=\"5\" class=\"empty\">Aucun palier.</td></tr>";
-  return pageTitleHtml("Récompenses","Gère les lots des gagnants et les paliers des autres participants.") +
-    "<div class=\"grid\"><div class=\"card span6\"><div class=\"section-title\"><h2>Nouveau lot</h2><span class=\"small muted\">Top " + Number(config?.winner_count||1) + "</span></div><form method=\"post\" action=\"/api/competition/" + id + "/prize-add\"><div class=\"form-grid\"><div><label>Lot</label><input name=\"name\" required></div><div><label>Durée</label><input name=\"durationText\" placeholder=\"1 mois\"></div><div class=\"full\"><label>Description</label><input name=\"description\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Ajouter le lot</button></div></div></form></div>" +
-      "<div class=\"card span6\"><div class=\"section-title\"><h2>Nouveau palier</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/tier-add\"><div class=\"form-grid\"><div><label>Minimum points</label><input name=\"minPoints\" type=\"number\" min=\"0\" required></div><div><label>Maximum</label><input name=\"maxPoints\" type=\"number\" min=\"0\" placeholder=\"Vide = infini\"></div><div><label>Type</label><select name=\"rewardType\"><option value=\"discount\">Réduction %</option><option value=\"credit\">Crédit</option><option value=\"custom\">Personnalisé</option></select></div><div><label>Valeur</label><input name=\"rewardValue\" type=\"number\" step=\"0.01\" required></div><div><label>Validité (jours)</label><input name=\"validityDays\" type=\"number\" min=\"1\"></div><div><label>Ordre</label><input name=\"sortOrder\" type=\"number\" value=\"0\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Ajouter le palier</button></div></div></form></div>" +
+  const [prizes,tiers,config,coupons,winnersResult] = await Promise.all([
+    listPrizes(comp.id),
+    listRewardTiers(comp.id),
+    getCompetitionConfig(comp.id),
+    listCompetitionCoupons(comp.id),
+    query(
+      \`SELECT cp.participant_id,p.pseudonym,cp.rank_cache,cp.total_points_cache
+       FROM competition_participants cp
+       JOIN participants p ON p.id=cp.participant_id
+       WHERE cp.competition_id=$1
+         AND cp.rank_cache IS NOT NULL
+         AND cp.rank_cache <= (SELECT winner_count FROM competitions WHERE id=$1)
+       ORDER BY cp.rank_cache ASC\`,
+      [comp.id]
+    )
+  ]);
+  const winners=winnersResult.rows;
+
+  const prizeRows = prizes.length ? prizes.map(p=>
+    "<tr><td>" + esc(p.name) + "</td><td>" + esc(p.duration_text||"") + "</td><td>" + esc(p.status) + "</td><td>" + esc(p.chosen_by_name||"—") + "</td></tr>"
+  ).join("") : "<tr><td colspan=\"4\" class=\"empty\">Aucun lot.</td></tr>";
+
+  const tierRows = tiers.length ? tiers.map(t=>{
+    const services=Array.isArray(t.eligible_services)?t.eligible_services.join(", "):"";
+    return "<tr><td>" + Number(t.min_points) + "</td><td>" + (t.max_points===null?"∞":Number(t.max_points)) + "</td><td>" + esc(t.reward_type) + "</td><td>" + Number(t.reward_value) + "</td><td>" + (t.validity_days||"—") + "</td><td>" + esc(services||"Tous") + "</td></tr>";
+  }).join("") : "<tr><td colspan=\"6\" class=\"empty\">Aucun palier.</td></tr>";
+
+  const availablePrizes=prizes.filter(p=>p.status==="available");
+  const winnerRows=winners.length?winners.map(w=>{
+    return "<tr><td>#" + Number(w.rank_cache) + "</td><td>" + esc(w.pseudonym) + "</td><td>" + Number(w.total_points_cache||0) + "</td><td><form method=\"post\" action=\"/api/competition/" + id + "/admin-prize-select\" class=\"actions\"><input type=\"hidden\" name=\"participantId\" value=\"" + esc(w.participant_id) + "\"><select name=\"prizeId\" style=\"width:auto\"><option value=\"\">Choisir un lot</option>" + availablePrizes.map(p=>"<option value=\"" + esc(p.id) + "\">" + esc(p.name) + " " + esc(p.duration_text||"") + "</option>").join("") + "</select><button class=\"btn2\" type=\"submit\">Attribuer</button></form></td></tr>";
+  }).join(""):"<tr><td colspan=\"4\" class=\"empty\">Le classement final n’est pas encore figé.</td></tr>";
+
+  const couponRows=coupons.length?coupons.map(cp=>
+    "<tr><td><div class=\"person\">" + esc(cp.pseudonym) + "</div><div class=\"code\">" + esc(cp.code) + "</div></td><td>" + esc(cp.reward_type) + " " + Number(cp.reward_value) + "</td><td>" + esc(cp.status) + "</td><td>" + (cp.expires_at?esc(new Date(cp.expires_at).toLocaleDateString("fr-FR")):"—") + "</td><td>" + (cp.status==="active"?"<form method=\"post\" action=\"/api/competition/" + id + "/coupon-use\"><input type=\"hidden\" name=\"couponId\" value=\"" + esc(cp.id) + "\"><button class=\"btn2\" type=\"submit\">Marquer utilisé</button></form>":"—") + "</td></tr>"
+  ).join(""):"<tr><td colspan=\"5\" class=\"empty\">Aucun coupon généré.</td></tr>";
+
+  return pageTitleHtml("Récompenses","Lots des gagnants, ordre de sélection, paliers et coupons à usage unique.") +
+    "<div class=\"grid\">" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Nouveau lot</h2><span class=\"small muted\">Top " + Number(config?.winner_count||1) + "</span></div><form method=\"post\" action=\"/api/competition/" + id + "/prize-add\"><div class=\"form-grid\"><div><label>Lot</label><input name=\"name\" required></div><div><label>Durée</label><input name=\"durationText\" placeholder=\"1 mois\"></div><div><label>Ordre</label><input name=\"sortOrder\" type=\"number\" value=\"0\"></div><div class=\"full\"><label>Description</label><input name=\"description\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Ajouter le lot</button></div></div></form></div>" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Nouveau palier</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/tier-add\"><div class=\"form-grid\"><div><label>Minimum points</label><input name=\"minPoints\" type=\"number\" min=\"0\" required></div><div><label>Maximum</label><input name=\"maxPoints\" type=\"number\" min=\"0\" placeholder=\"Vide = infini\"></div><div><label>Type</label><select name=\"rewardType\"><option value=\"discount\">Réduction %</option><option value=\"credit\">Crédit</option><option value=\"custom\">Personnalisé</option></select></div><div><label>Valeur</label><input name=\"rewardValue\" type=\"number\" step=\"0.01\" required></div><div><label>Validité (jours)</label><input name=\"validityDays\" type=\"number\" min=\"1\"></div><div><label>Ordre</label><input name=\"sortOrder\" type=\"number\" value=\"0\"></div><div class=\"full\"><label>Services éligibles</label><input name=\"eligibleServices\" placeholder=\"Netflix, Prime Video, Canva\"></div><div class=\"full\"><label>Conditions</label><textarea name=\"conditions\"></textarea></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Ajouter le palier</button></div></div></form></div>" +
       "<div class=\"card span6\"><div class=\"section-title\"><h2>Lots</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Lot</th><th>Durée</th><th>Statut</th><th>Choisi par</th></tr></thead><tbody>" + prizeRows + "</tbody></table></div></div>" +
-      "<div class=\"card span6\"><div class=\"section-title\"><h2>Paliers</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Min</th><th>Max</th><th>Type</th><th>Valeur</th><th>Jours</th></tr></thead><tbody>" + tierRows + "</tbody></table></div></div>" +
-      "<div class=\"card span12\"><div class=\"section-title\"><div><h2>Fin de compétition</h2><div class=\"subnav-note\">Fige le classement final puis génère les coupons selon les paliers.</div></div></div><div class=\"actions\"><form method=\"post\" action=\"/api/competition/" + id + "/finalize\"><button class=\"btn\" type=\"submit\">Figer le classement final</button></form><form method=\"post\" action=\"/api/competition/" + id + "/generate-coupons\"><button class=\"btn2\" type=\"submit\">Générer les coupons</button></form></div></div></div>";
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Paliers</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Min</th><th>Max</th><th>Type</th><th>Valeur</th><th>Jours</th><th>Services</th></tr></thead><tbody>" + tierRows + "</tbody></table></div></div>" +
+      "<div class=\"card span12\"><div class=\"section-title\"><div><h2>Sélection des gagnants</h2><div class=\"subnav-note\">Le participant choisit dans l’ordre du classement. L’administrateur peut attribuer un lot si nécessaire.</div></div></div><div class=\"table-wrap\"><table><thead><tr><th>Rang</th><th>Participant</th><th>Points</th><th>Choix admin</th></tr></thead><tbody>" + winnerRows + "</tbody></table></div></div>" +
+      "<div class=\"card span12\"><div class=\"section-title\"><h2>Coupons</h2><span class=\"small muted\">" + coupons.length + " généré(s)</span></div><div class=\"table-wrap\"><table><thead><tr><th>Participant / code</th><th>Avantage</th><th>Statut</th><th>Expiration</th><th>Action</th></tr></thead><tbody>" + couponRows + "</tbody></table></div></div>" +
+      "<div class=\"card span12\"><div class=\"section-title\"><div><h2>Fin de compétition</h2><div class=\"subnav-note\">Fige le classement final puis génère les coupons selon les paliers.</div></div></div><div class=\"actions\"><form method=\"post\" action=\"/api/competition/" + id + "/finalize\"><button class=\"btn\" type=\"submit\">Figer le classement final</button></form><form method=\"post\" action=\"/api/competition/" + id + "/generate-coupons\"><button class=\"btn2\" type=\"submit\">Générer les coupons</button></form></div></div>" +
+    "</div>";
 }
 
 async function adminFraudContent(comp) {
