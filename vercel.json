@@ -9,6 +9,14 @@
       "destination": "/api/index?path=admin"
     },
     {
+      "source": "/admin/logout",
+      "destination": "/api/index?path=admin/logout"
+    },
+    {
+      "source": "/admin/login",
+      "destination": "/api/index?path=admin/login"
+    },
+    {
       "source": "/c/:id",
       "destination": "/api/index?path=c/:id"
     },
