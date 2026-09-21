@@ -71,6 +71,26 @@
     {
       "source": "/api/competition/:id/export.csv",
       "destination": "/api/index?path=api/competition/:id/export.csv"
+    },
+    {
+      "source": "/join/:id",
+      "destination": "/api/index?path=join/:id"
+    },
+    {
+      "source": "/participant/login",
+      "destination": "/api/index?path=participant/login"
+    },
+    {
+      "source": "/participant/logout",
+      "destination": "/api/index?path=participant/logout"
+    },
+    {
+      "source": "/me",
+      "destination": "/api/index?path=me"
+    },
+    {
+      "source": "/me/:id",
+      "destination": "/api/index?path=me/:id"
     }
   ]
 }
