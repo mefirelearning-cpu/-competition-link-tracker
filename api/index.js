@@ -5,6 +5,7 @@ import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, 
 import { trackReferralVisit } from "../lib/referral-tracking.js";
 import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule } from "../lib/scoring.js";
 import { getVisitorIdentity } from "../lib/referral-tracking.js";
+import { query } from "../lib/db.js";
 import { getCompetitionConfig, updateCompetitionConfig, resizeCompetitionDays, ensureCompetitionLifecycle } from "../lib/competition-config.js";
 import { getFraudSettings, updateFraudSettings, listFraudFlags, resolveFraudFlag } from "../lib/fraud.js";
 import { createAnnouncement, listParticipantNotifications, markNotificationRead } from "../lib/notifications.js";
@@ -79,6 +80,27 @@ function statsKey(id, code) { return PREFIX + ":stats:" + id + ":" + code; }
 function profileKey(id) { return PREFIX + ":profile:" + id; }
 async function getProfile(id) { return String((await redis(["GET", profileKey(id)])) || ""); }
 async function saveProfile(id, data) { if (data) await redis(["SET", profileKey(id), data]); else await redis(["DEL", profileKey(id)]); }
+
+async function syncRedisPointCacheByParticipantId(competitionId, participantId, totalPoints) {
+  if (!participantId || totalPoints === null || totalPoints === undefined) return;
+  try {
+    const result = await query(
+      `SELECT referral_code
+       FROM competition_participants
+       WHERE competition_id = $1
+         AND participant_id = $2
+       LIMIT 1`,
+      [competitionId, participantId]
+    );
+    const code = result.rows[0]?.referral_code;
+    if (code) {
+      await redis(["HSET", statsKey(competitionId, code), "points", String(Math.max(0, Number(totalPoints) || 0))]);
+    }
+  } catch (error) {
+    console.error("redis-point-cache-sync:", error);
+  }
+}
+
 
 async function getCompetitions() {
   return await getJSON(competitionsKey(), []);
