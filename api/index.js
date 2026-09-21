@@ -878,7 +878,7 @@ function leaderboardRowsHtml(rows, origin, comp, publicMode) {
       "<td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
       "<td class=\"points-col\">" + r.points + "</td><td>" + r.clicks + "</td><td><b>" + r.unique + "</b></td><td>" + r.valid + "</td>" +
       "<td><div class=\"actions\"><button type=\"button\" class=\"iconbtn copy\" data-link=\"" + esc(link) + "\">Copier</button><a class=\"iconbtn\" href=\"" + esc(link) + "\" target=\"_blank\">Ouvrir</a></div></td>" +
-      "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>";
+      "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Retirer</button></form></td></tr>";
   }).join("");
 }
 
@@ -2414,11 +2414,27 @@ export default async function handler(req, res) {
 
       if (action === "delete-participant" && req.method === "POST") {
         const b = parseBody(req);
-        const code = String(b.code || "");
-        const participants = (await getParticipants(id)).filter(p=>p.code!==code);
+        const code = String(b.code || "").trim();
+        if (!code) return send(res,400,"Code participant requis","text/plain; charset=utf-8");
+
+        const participants = await getParticipants(id);
+        const idx = participants.findIndex(p=>p.code===code);
+        if (idx < 0) return send(res,404,"Participant introuvable","text/plain; charset=utf-8");
+
+        participants[idx].active = false;
+        participants[idx].withdrawnAt = new Date().toISOString();
         await saveParticipants(id, participants);
-        await redis(["DEL", statsKey(id, code)]);
+
+        // Preserve Redis counters and PostgreSQL history. Only withdraw the membership.
         await shadowWithdrawParticipant(id, code);
+        await logAdminAction({
+          action:"participant_withdrawn",
+          entityType:"participant",
+          entityId:code,
+          description:"Participant retiré de la compétition sans suppression de son historique",
+          metadata:{competitionId:id,referralCode:code}
+        });
+
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
