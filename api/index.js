@@ -104,6 +104,34 @@ async function syncRedisPointCacheByParticipantId(competitionId, participantId, 
 }
 
 
+async function syncAllRedisPointCaches(competitionId) {
+  try {
+    const result = await query(
+      `SELECT referral_code,total_points_cache
+       FROM competition_participants
+       WHERE competition_id=$1`,
+      [competitionId]
+    );
+    for (const row of result.rows) {
+      await redis([
+        "HSET",
+        statsKey(competitionId,row.referral_code),
+        "points",
+        String(Math.max(0,Number(row.total_points_cache)||0))
+      ]);
+    }
+  } catch (error) {
+    console.error("redis-all-point-cache-sync:",error);
+  }
+}
+
+function hiddenInputsFromBody(body, names) {
+  return names.map(name =>
+    "<input type=\"hidden\" name=\"" + esc(name) + "\" value=\"" + esc(body[name] ?? "") + "\">"
+  ).join("");
+}
+
+
 async function getCompetitions() {
   return await getJSON(competitionsKey(), []);
 }
