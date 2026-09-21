@@ -297,7 +297,7 @@ function participantShell(title, body, extraScript = "") {
     ":root{--p-bg:#f5f5f2;--p-card:#fff;--p-text:#101010;--p-muted:#6d6d6d;--p-line:#deded8;--p-accent:#111;--p-ok:#157347}" +
     "*{box-sizing:border-box}body{margin:0;background:var(--p-bg);color:var(--p-text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}" +
     "a{text-decoration:none;color:inherit}.p-wrap{width:min(1180px,calc(100% - 24px));margin:0 auto;padding:18px 0 90px}.p-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0 18px}.p-brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:-.02em}.p-mark{width:32px;height:32px;border-radius:10px;background:#111;color:#fff;display:grid;place-items:center;font-size:13px}.p-nav{display:flex;gap:8px;align-items:center}.p-btn,.p-btn2{border:0;border-radius:11px;padding:11px 14px;font:inherit;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.p-btn{background:#111;color:#fff}.p-btn2{background:#fff;color:#111;border:1px solid var(--p-line)}.p-card{background:#fff;border:1px solid var(--p-line);border-radius:16px;padding:18px}.p-hero{background:#111;color:#fff;border-radius:20px;padding:24px;margin-bottom:14px}.p-hero h1{font-size:clamp(30px,6vw,54px);line-height:.98;letter-spacing:-.05em;margin:8px 0 10px}.p-hero p{color:#c9c9c9;margin:0;max-width:720px;line-height:1.5}.p-kicker{font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:900;color:#a8a8a8}.p-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}.p-span12{grid-column:span 12}.p-span8{grid-column:span 8}.p-span6{grid-column:span 6}.p-span4{grid-column:span 4}.p-stat b{display:block;font-size:28px;letter-spacing:-.04em;margin-top:4px}.p-stat span{font-size:11px;color:var(--p-muted);font-weight:800;text-transform:uppercase;letter-spacing:.06em}.p-link{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#f6f6f3;border:1px solid var(--p-line);border-radius:10px;padding:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.p-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.p-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.p-title h2{margin:0;font-size:18px;letter-spacing:-.02em}.p-muted{color:var(--p-muted)}.p-small{font-size:12px}.p-form{display:grid;gap:12px}.p-form label{display:block;font-size:12px;font-weight:800;margin-bottom:6px}.p-form input{width:100%;border:1px solid var(--p-line);background:#fff;border-radius:11px;padding:12px 13px;font:inherit;outline:none}.p-form input:focus{border-color:#111;box-shadow:0 0 0 3px #0000000c}.p-notice{border:1px solid var(--p-line);background:#fafaf8;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5}.p-success{border-color:#b9d8c7;background:#f3fbf6}.p-error{border-color:#efc7c2;background:#fff7f6}.p-code{font:900 34px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}.p-bottom{display:none}.p-rank{font-size:60px;font-weight:950;letter-spacing:-.07em;line-height:.9}" +
-    "@media(max-width:760px){.p-wrap{width:calc(100% - 18px);padding-bottom:96px}.p-top .p-nav{display:none}.p-grid{grid-template-columns:repeat(2,1fr)}.p-span12,.p-span8,.p-span6,.p-span4{grid-column:1/-1}.p-card{padding:15px}.p-hero{padding:20px}.p-hero h1{font-size:38px}.p-stat{grid-column:span 1}.p-stat b{font-size:24px}.p-bottom{position:fixed;display:grid;grid-template-columns:repeat(3,1fr);left:9px;right:9px;bottom:9px;background:#111;color:#fff;border-radius:16px;padding:6px;z-index:50}.p-bottom a{padding:10px 6px;text-align:center;font-size:11px;font-weight:800;border-radius:10px}.p-bottom a.active{background:#fff;color:#111}.p-actions .p-btn,.p-actions .p-btn2{flex:1 1 auto}.p-code{font-size:28px}}" +
+    "@media(max-width:760px){.p-wrap{width:calc(100% - 18px);padding-bottom:96px}.p-top .p-nav{display:none}.p-grid{grid-template-columns:repeat(2,1fr)}.p-span12,.p-span8,.p-span6,.p-span4{grid-column:1/-1}.p-card{padding:15px}.p-hero{padding:20px}.p-hero h1{font-size:38px}.p-stat{grid-column:span 1}.p-stat b{font-size:24px}.p-bottom{position:fixed;display:grid;grid-template-columns:repeat(5,1fr);left:9px;right:9px;bottom:9px;background:#111;color:#fff;border-radius:16px;padding:6px;z-index:50}.p-bottom a{padding:10px 6px;text-align:center;font-size:11px;font-weight:800;border-radius:10px}.p-bottom a.active{background:#fff;color:#111}.p-actions .p-btn,.p-actions .p-btn2{flex:1 1 auto}.p-code{font-size:28px}}" +
     "</style></head><body><div class=\"p-wrap\">" + body + "</div>" +
     (extraScript ? "<script>" + extraScript + "</script>" : "") +
     "</body></html>";
@@ -310,10 +310,17 @@ function participantTop(session = null) {
     "</div></div>";
 }
 
-function participantBottom(session) {
+function participantBottom(session, active = "home") {
   if (!session) return "";
   const id = encodeURIComponent(session.competition_id);
-  return "<nav class=\"p-bottom\"><a class=\"active\" href=\"/me/" + id + "\">Mon espace</a><a href=\"/leaderboard/" + id + "\">Classement</a><a href=\"/r/" + id + "/" + encodeURIComponent(session.referral_code) + "\">Mon lien</a></nav>";
+  const item = (key,label,href) => "<a class=\"" + (active===key?"active":"") + "\" href=\"" + href + "\">" + label + "</a>";
+  return "<nav class=\"p-bottom\">" +
+    item("home","Accueil","/me/" + id) +
+    item("campaigns","Campagnes","/me/" + id + "/campaigns") +
+    item("ranking","Classement","/leaderboard/" + id) +
+    item("rewards","Récompenses","/me/" + id + "/rewards") +
+    item("rules","Règlement","/me/" + id + "/rules") +
+  "</nav>";
 }
 
 function joinPage(comp, message = "", values = {}) {
