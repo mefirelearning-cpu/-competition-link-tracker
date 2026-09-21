@@ -1469,6 +1469,27 @@ export default async function handler(req, res) {
         return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
       }
 
+      if (action === "config-update" && req.method === "POST") {
+        const b = parseBody(req);
+        const result = await updateCompetitionConfig({
+          competitionId:id,
+          startsAt:b.startsAt || null,
+          endsAt:b.endsAt || null,
+          timezone:b.timezone || "Africa/Douala",
+          registrationsOpen:String(b.registrationsOpen||"")==="1",
+          leaderboardVisible:String(b.leaderboardVisible||"")==="1",
+          leaderboardFrozen:String(b.leaderboardFrozen||"")==="1",
+          winnerCount:b.winnerCount,
+          maxParticipants:b.maxParticipants,
+          rules:b.rules,
+          adminId:"admin"
+        });
+        if (!result.ok && result.reason === "invalid_dates") {
+          return send(res, 400, "La date de fin doit être postérieure à la date de début.", "text/plain; charset=utf-8");
+        }
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
+      }
+
       if (action === "campaign-create" && req.method === "POST") {
         const b = parseBody(req);
         await createCampaign({
