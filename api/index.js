@@ -2442,7 +2442,7 @@ export default async function handler(req, res) {
 
       if (action === "tier-add" && req.method === "POST") {
         const b = parseBody(req);
-        await addRewardTier({
+        const result=await addRewardTier({
           competitionId:id,
           minPoints:b.minPoints,
           maxPoints:b.maxPoints,
@@ -2454,6 +2454,14 @@ export default async function handler(req, res) {
           sortOrder:b.sortOrder,
           adminId:"admin"
         });
+        if(!result.ok){
+          const msg=result.reason==="invalid_range"
+            ? "Le maximum doit être supérieur ou égal au minimum."
+            : result.reason==="overlap"
+              ? "Ce palier chevauche déjà un palier actif. Modifie les bornes avant de l’ajouter."
+              : "Création du palier impossible.";
+          return send(res,400,msg,"text/plain; charset=utf-8");
+        }
         return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
       }
 
@@ -2474,7 +2482,12 @@ export default async function handler(req, res) {
           adminId:"admin"
         });
         if(!result.ok){
-          return send(res,400,result.reason==="invalid_range"?"Le maximum doit être supérieur ou égal au minimum.":"Modification du palier impossible.","text/plain; charset=utf-8");
+          const msg=result.reason==="invalid_range"
+            ? "Le maximum doit être supérieur ou égal au minimum."
+            : result.reason==="overlap"
+              ? "Ce palier chevauche déjà un autre palier actif."
+              : "Modification du palier impossible.";
+          return send(res,400,msg,"text/plain; charset=utf-8");
         }
         return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
       }
