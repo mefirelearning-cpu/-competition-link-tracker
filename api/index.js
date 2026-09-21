@@ -1652,15 +1652,104 @@ export default async function handler(req, res) {
           whatsappUrl: b.whatsappUrl,
           status: b.status,
           pointsShare: b.pointsShare,
+          pointsClick: b.pointsClick,
           pointsInterest: b.pointsInterest,
           pointsLead: b.pointsLead,
+          pointsReferral: b.pointsReferral,
+          pointsRetention: b.pointsRetention,
           pointsSale: b.pointsSale,
           multiplier: b.multiplier,
           conversionMultiplier: b.conversionMultiplier,
           dailyShareLimit: b.dailyShareLimit,
+          clickDailyCap: b.clickDailyCap,
           featured: String(b.featured || "") === "1",
+          startsAt: b.startsAt || null,
+          endsAt: b.endsAt || null,
           adminId: "admin"
         });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/campaigns", 303);
+      }
+
+      if (action === "campaign-update" && req.method === "POST") {
+        const b = parseBody(req);
+        const applyMode = String(b.applyMode || "future");
+        if (applyMode === "recalculate" && String(b.confirmRecalculate || "") !== "1") {
+          const fields = [
+            "campaignId","name","product","description","commercialText","imageData",
+            "destinationUrl","whatsappUrl","status","pointsShare","pointsClick",
+            "pointsInterest","pointsLead","pointsReferral","pointsRetention","pointsSale",
+            "multiplier","conversionMultiplier","dailyShareLimit","clickDailyCap",
+            "featured","startsAt","endsAt","applyMode"
+          ];
+          return send(res, 409, pageShell(
+            "Confirmer le recalcul",
+            topNav() +
+            "<div class=\"card\" style=\"max-width:760px;margin:40px auto\"><h2>Recalcul historique</h2><p class=\"muted\">Cette opération va recalculer les anciennes transactions de cette campagne avec les nouveaux coefficients. L’action sera journalisée.</p>" +
+            "<form method=\"post\" action=\"/api/competition/" + encodeURIComponent(id) + "/campaign-update\">" +
+            hiddenInputsFromBody(b,fields) +
+            "<input type=\"hidden\" name=\"confirmRecalculate\" value=\"1\">" +
+            "<div class=\"actions\"><a class=\"btn2\" href=\"/c/" + encodeURIComponent(id) + "/campaigns\">Annuler</a><button class=\"danger\" type=\"submit\">Confirmer le recalcul</button></div></form></div>"
+          ));
+        }
+
+        const result = await updateCampaign({
+          competitionId:id,
+          campaignId:String(b.campaignId||""),
+          name:b.name,
+          product:b.product,
+          description:b.description,
+          commercialText:b.commercialText,
+          imageData:b.imageData,
+          destinationUrl:b.destinationUrl,
+          whatsappUrl:b.whatsappUrl,
+          status:b.status,
+          pointsShare:b.pointsShare,
+          pointsClick:b.pointsClick,
+          pointsInterest:b.pointsInterest,
+          pointsLead:b.pointsLead,
+          pointsReferral:b.pointsReferral,
+          pointsRetention:b.pointsRetention,
+          pointsSale:b.pointsSale,
+          multiplier:b.multiplier,
+          conversionMultiplier:b.conversionMultiplier,
+          dailyShareLimit:b.dailyShareLimit,
+          clickDailyCap:b.clickDailyCap,
+          featured:String(b.featured||"")==="1",
+          startsAt:b.startsAt||null,
+          endsAt:b.endsAt||null,
+          adminId:"admin"
+        });
+        if (!result.ok) return send(res,404,"Campagne introuvable","text/plain; charset=utf-8");
+
+        if (applyMode === "recalculate") {
+          const campaignId=String(b.campaignId||"");
+          await recalculatePointTransactions({
+            competitionId:id,
+            type:"valid_click",
+            campaignId,
+            basePoints:b.pointsClick,
+            multiplier:b.multiplier,
+            dailyCapPoints:b.clickDailyCap,
+            adminId:"admin"
+          });
+          for (const cfg of [
+            ["share",b.pointsShare,b.multiplier],
+            ["interest",b.pointsInterest,b.multiplier],
+            ["lead",b.pointsLead,b.conversionMultiplier],
+            ["sale",b.pointsSale,b.conversionMultiplier]
+          ]) {
+            await recalculatePointTransactions({
+              competitionId:id,
+              type:cfg[0],
+              campaignId,
+              basePoints:cfg[1],
+              multiplier:cfg[2],
+              dailyCapPoints:null,
+              adminId:"admin"
+            });
+          }
+          await syncAllRedisPointCaches(id);
+        }
         return redirect(res, "/c/" + encodeURIComponent(id) + "/campaigns", 303);
       }
 
