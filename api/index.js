@@ -11,7 +11,7 @@ import { getFraudSettings, updateFraudSettings, listFraudFlags, resolveFraudFlag
 import { createAnnouncement, listParticipantNotifications, markNotificationRead } from "../lib/notifications.js";
 import { listPrizes, addPrize, listRewardTiers, addRewardTier, freezeFinalRanking, selectPrize, generateRewardCoupons, participantRewards } from "../lib/rewards.js";
 import { createInterest, listProspects, confirmLead, confirmSale, rejectInterest, participantConversionStats } from "../lib/conversions.js";
-import { listCompetitionDays, getActiveDay, listDayMissions, createCompetitionDay, createMission, claimDailyReward, addStreakRule } from "../lib/competition-days.js";
+import { listCompetitionDays, getActiveDay, listDayMissions, createCompetitionDay, createMission, claimDailyReward, addStreakRule, submitMissionCompletion, listMissionCompletions, reviewMissionCompletion } from "../lib/competition-days.js";
 import { listCampaigns, getCampaignBySlug, createCampaign, updateCampaignStatus, deleteCampaign, recordCampaignShare, getCampaignStats } from "../lib/marketing.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
@@ -400,7 +400,7 @@ async function participantDashboardPage(origin, session) {
 
   const missionHtml = day
     ? "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Événement du jour</div><h2 style=\"font-size:25px;margin:7px 0 8px\">" + esc(day.title) + "</h2><p class=\"p-muted\" style=\"margin:0 0 12px\">" + esc(day.description||day.marketing_message||"Consulte la mission et partage la campagne vedette.") + "</p>" +
-      (missions.length ? missions.map(m=>"<div class=\"p-notice\" style=\"margin-top:8px\"><b>" + esc(m.title) + "</b><br>" + esc(m.description||"") + (Number(m.points_fixed||0) ? "<br><span class=\"p-small\">+" + Number(m.points_fixed) + " pts</span>" : "") + "</div>").join("") : "") +
+      (missions.length ? missions.map(m=>"<div class=\"p-notice\" style=\"margin-top:8px\"><b>" + esc(m.title) + "</b><br>" + esc(m.description||"") + (Number(m.points_fixed||0) ? "<br><span class=\"p-small\">+" + Number(m.points_fixed) + " pts</span>" : "") + "<form method=\"post\" action=\"/api/me/" + encodeURIComponent(comp.id) + "/mission-submit\" style=\"margin-top:9px\"><input type=\"hidden\" name=\"missionId\" value=\"" + esc(m.id) + "\"><button class=\"p-btn2\" type=\"submit\">J’ai terminé</button></form></div>").join("") : "") +
       (day.featured_campaign_slug ? "<div class=\"p-actions\"><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(comp.id) + "/campaigns\">Voir l’affiche vedette</a></div>" : "") +
       "</div>"
     : "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Événement du jour</div><h2 style=\"margin:7px 0\">Aucune journée active</h2><p class=\"p-muted\">L’administrateur n’a pas encore publié l’événement du jour.</p></div>";
