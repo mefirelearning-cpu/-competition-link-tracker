@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipants, shadowWithdrawParticipant, shadowSyncStats, shadowRecordAdminAdjustment, shadowSyncCompetitionSettings } from "../lib/shadow-store.js";
 import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdminSession, destroyAdminSession, sameOriginRequest, loginNextPath } from "../lib/admin-auth.js";
-import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, joinExistingParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
+import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, joinExistingParticipantAccount, allowParticipantRegistration, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
 import { trackReferralVisit } from "../lib/referral-tracking.js";
 import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule, recalculatePointTransactions, adminAdjustPoints } from "../lib/scoring.js";
 import { getVisitorIdentity } from "../lib/referral-tracking.js";
@@ -1679,6 +1679,11 @@ export default async function handler(req, res) {
           }
           await createParticipantSession(req,res,result.participantId,competitionId);
           return redirect(res,"/me/"+encodeURIComponent(competitionId),303);
+        }
+
+        const registrationRate=await allowParticipantRegistration(req,whatsapp);
+        if(!registrationRate.ok){
+          return send(res,429,joinPage(dbComp,"Trop de tentatives d’inscription depuis cet appareil. Réessaie dans environ une heure.",{pseudonym,whatsapp}));
         }
 
         result = await registerParticipantAccount({
