@@ -786,11 +786,17 @@ async function dashboardPage(origin) {
       "<div class=\"card span5\"><div class=\"section-title\"><h2>Nouvelle compétition</h2><span class=\"status\"><span class=\"dot active\"></span>Prête à lancer</span></div>" +
         "<form method=\"post\" action=\"/api/competition/create\"><div class=\"form-grid\">" +
           "<div class=\"full\"><label>Nom</label><input name=\"name\" placeholder=\"Ex. Battle des Ambassadeurs\" required></div>" +
-          "<div class=\"full\"><label>Lot / récompense</label><input name=\"prize\" placeholder=\"Ex. Spotify Premium 3 mois\"></div>" +
-          "<div class=\"full\"><label>Lien de destination</label><input name=\"destination\" value=\"" + esc(WA_DEFAULT) + "\" required></div>" +
-          "<div><label>Date de fin</label><input name=\"endsAt\" class=\"config-datetime\" type=\"datetime-local\"></div>" +
-          "<div><label>Statut</label><select name=\"status\"><option value=\"active\">Active</option><option value=\"draft\">Brouillon</option><option value=\"paused\">En pause</option></select></div>" +
-          "<div class=\"full\"><label>Palette d’accent</label><select name=\"theme\"><option value=\"blue\">Bleu premium</option><option value=\"amber\">Ambre premium</option><option value=\"red\">Rouge profond</option><option value=\"mono\">Monochrome</option></select></div>" +
+          "<div class=\"full\"><label>Description</label><textarea name=\"description\" placeholder=\"Objectif et contexte de la compétition\"></textarea></div>" +
+          "<div class=\"full\"><label>Lot / récompense</label><input name=\"prize\" placeholder=\"Résumé public facultatif\"></div>" +
+          "<div class=\"full\"><label>Lien de destination par défaut</label><input name=\"destination\" value=\"" + esc(WA_DEFAULT) + "\" required></div>" +
+          "<div><label>Début</label><input name=\"startsAt\" class=\"config-datetime\" type=\"datetime-local\"></div>" +
+          "<div><label>Fin</label><input name=\"endsAt\" class=\"config-datetime\" type=\"datetime-local\"></div>" +
+          "<div><label>Fuseau horaire</label><input name=\"timezone\" value=\"Africa/Douala\"></div>" +
+          "<div><label>Nombre de gagnants</label><input name=\"winnerCount\" type=\"number\" min=\"1\" value=\"8\"></div>" +
+          "<div><label>Maximum participants</label><input name=\"maxParticipants\" type=\"number\" min=\"1\" placeholder=\"Vide = illimité\"></div>" +
+          "<div><label>Statut</label><select name=\"status\"><option value=\"draft\">Brouillon</option><option value=\"scheduled\">Programmée</option><option value=\"active\">Active</option><option value=\"paused\">En pause</option></select></div>" +
+          "<div><label>Inscriptions</label><select name=\"registrationsOpen\"><option value=\"1\">Ouvertes</option><option value=\"0\">Fermées</option></select></div>" +
+          "<div><label>Palette d’accent</label><select name=\"theme\"><option value=\"blue\">Bleu premium</option><option value=\"amber\">Ambre premium</option><option value=\"red\">Rouge profond</option><option value=\"mono\">Monochrome</option></select></div>" +
           "<div class=\"full\"><button class=\"btn\" type=\"submit\" style=\"width:100%\">Créer la compétition</button></div>" +
         "</div></form>" +
         "<div class=\"footer-note\">Les clics et visiteurs uniques indiquent l’activité des liens. Ils ne prouvent pas à eux seuls qu’une personne a effectivement rejoint le groupe WhatsApp.</div>" +
@@ -1762,11 +1768,17 @@ export default async function handler(req, res) {
       const comp = {
         id,
         name,
+        description: String(b.description || "").trim(),
         prize: String(b.prize || "").trim(),
         destination: String(b.destination || WA_DEFAULT).trim(),
-        status: ["active","draft","paused"].includes(String(b.status)) ? String(b.status) : "active",
+        status: ["active","scheduled","draft","paused"].includes(String(b.status)) ? String(b.status) : "draft",
         theme: ["blue","amber","red","mono"].includes(String(b.theme)) ? String(b.theme) : "blue",
+        startsAt: String(b.startsAt || "").trim(),
         endsAt: String(b.endsAt || "").trim(),
+        timezone: String(b.timezone || "Africa/Douala").trim() || "Africa/Douala",
+        registrationsOpen: String(b.registrationsOpen || "1") === "1",
+        winnerCount: Math.max(1, Number.parseInt(String(b.winnerCount || "8"),10) || 8),
+        maxParticipants: String(b.maxParticipants || "").trim() ? Math.max(1,Number.parseInt(String(b.maxParticipants),10)||1) : null,
         createdAt: new Date().toISOString()
       };
       comps.unshift(comp);
