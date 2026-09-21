@@ -1479,12 +1479,15 @@ export default async function handler(req, res) {
 
       if (parts[3] === "mission-submit") {
         const b = parseBody(req);
-        await submitMissionCompletion({
+        const missionResult = await submitMissionCompletion({
           competitionId,
           missionId: String(b.missionId || ""),
           participantId: session.participant_id,
           proofData: String(b.proofData || "")
         });
+        if (missionResult.ok && missionResult.totalPoints !== null && missionResult.totalPoints !== undefined) {
+          await syncRedisPointCacheByParticipantId(competitionId, session.participant_id, missionResult.totalPoints);
+        }
         return redirect(res, "/me/" + encodeURIComponent(competitionId), 303);
       }
 
@@ -1825,6 +1828,55 @@ export default async function handler(req, res) {
         return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
       }
 
+      if (action === "streak-add" && req.method === "POST") {
+        const b = parseBody(req);
+        await addStreakRule({
+          competitionId:id,
+          consecutiveDays:b.consecutiveDays,
+          bonusPoints:b.bonusPoints
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "day-duplicate" && req.method === "POST") {
+        const b = parseBody(req);
+        await duplicateCompetitionDay({
+          competitionId:id,
+          dayId:String(b.dayId||""),
+          adminId:"admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "day-move" && req.method === "POST") {
+        const b = parseBody(req);
+        await moveCompetitionDay({
+          competitionId:id,
+          dayId:String(b.dayId||""),
+          direction:String(b.direction||"down"),
+          adminId:"admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "day-delete" && req.method === "POST") {
+        const b = parseBody(req);
+        const result=await deleteCompetitionDay({
+          competitionId:id,
+          dayId:String(b.dayId||""),
+          force:String(b.force||"")==="1",
+          adminId:"admin"
+        });
+        if (!result.ok && result.reason==="confirmation_required") {
+          return send(res,409,pageShell(
+            "Confirmer la suppression",
+            topNav() +
+            "<div class=\"card\" style=\"max-width:720px;margin:40px auto\"><h2>Supprimer cette journée ?</h2><p class=\"muted\">Cette journée contient déjà des éléments configurés ou a été publiée. La suppression enlèvera aussi ses missions et réclamations associées.</p><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(id) + "/day-delete\"><input type=\"hidden\" name=\"dayId\" value=\"" + esc(b.dayId) + "\"><input type=\"hidden\" name=\"force\" value=\"1\"><div class=\"actions\"><a class=\"btn2\" href=\"/c/" + encodeURIComponent(id) + "/days\">Annuler</a><button class=\"danger\" type=\"submit\">Confirmer la suppression</button></div></form></div>"
+          ));
+        }
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
       if (action === "mission-create" && req.method === "POST") {
         const b = parseBody(req);
         await createMission({
@@ -1836,7 +1888,9 @@ export default async function handler(req, res) {
           pointsFixed: b.pointsFixed,
           multiplier: b.multiplier || 1,
           validationMode: b.validationMode,
-          status: "active",
+          status: b.status || "draft",
+          startsAt: b.startsAt || null,
+          endsAt: b.endsAt || null,
           adminId: "admin"
         });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
