@@ -91,6 +91,18 @@
     {
       "source": "/me/:id",
       "destination": "/api/index?path=me/:id"
+    },
+    {
+      "source": "/api/competition/:id/scoring-rule",
+      "destination": "/api/index?path=api/competition/:id/scoring-rule"
+    },
+    {
+      "source": "/api/competition/:id/burst-add",
+      "destination": "/api/index?path=api/competition/:id/burst-add"
+    },
+    {
+      "source": "/api/competition/:id/burst-delete",
+      "destination": "/api/index?path=api/competition/:id/burst-delete"
     }
   ]
 }
