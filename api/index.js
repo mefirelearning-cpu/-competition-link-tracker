@@ -6,7 +6,7 @@ import { trackReferralVisit } from "../lib/referral-tracking.js";
 import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule, recalculatePointTransactions, adminAdjustPoints } from "../lib/scoring.js";
 import { getVisitorIdentity } from "../lib/referral-tracking.js";
 import { query } from "../lib/db.js";
-import { getCompetitionConfig, updateCompetitionConfig, resizeCompetitionDays, ensureCompetitionLifecycle } from "../lib/competition-config.js";
+import { getCompetitionConfig, updateCompetitionConfig, resizeCompetitionDays, ensureCompetitionLifecycle, runLifecycleSweep } from "../lib/competition-config.js";
 import { getFraudSettings, updateFraudSettings, listFraudFlags, resolveFraudFlag } from "../lib/fraud.js";
 import { createAnnouncement, listParticipantNotifications, markNotificationRead } from "../lib/notifications.js";
 import { listPrizes, addPrize, updatePrize, deletePrize, movePrize, listRewardTiers, addRewardTier, updateRewardTier, deleteRewardTier, moveRewardTier, freezeFinalRanking, selectPrize, generateRewardCoupons, participantRewards, listCompetitionCoupons, markCouponUsed } from "../lib/rewards.js";
@@ -1618,6 +1618,17 @@ export default async function handler(req, res) {
       if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
       await destroyAdminSession(req, res);
       return redirect(res, "/admin/login", 303);
+    }
+
+    if (path === "api/cron/lifecycle") {
+      if (req.method !== "GET") return send(res,405,"Méthode non autorisée","text/plain; charset=utf-8");
+      const authHeader=String(req.headers.authorization||"");
+      const cronSecret=String(process.env.CRON_SECRET||"");
+      const scheduleHeader=String(req.headers["x-vercel-cron-schedule"]||"");
+      const authorized=(cronSecret && authHeader === "Bearer " + cronSecret) || scheduleHeader === "*/5 * * * *";
+      if (!authorized) return send(res,401,"Non autorisé","text/plain; charset=utf-8");
+      const result=await runLifecycleSweep();
+      return send(res,200,JSON.stringify(result),"application/json; charset=utf-8");
     }
 
     if (path.startsWith("join/")) {
