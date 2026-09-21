@@ -813,10 +813,11 @@ async function adminCampaignsContent(comp) {
 
 async function adminDaysContent(comp) {
   const id = encodeURIComponent(comp.id);
-  const [days,campaigns,config] = await Promise.all([
+  const [days,campaigns,config,completions] = await Promise.all([
     listCompetitionDays(comp.id),
     listCampaigns(comp.id,{admin:true}),
-    getCompetitionConfig(comp.id)
+    getCompetitionConfig(comp.id),
+    listMissionCompletions(comp.id)
   ]);
   const campaignOptions = "<option value=\"\">Aucune</option>" + campaigns.map(x=>"<option value=\"" + esc(x.id) + "\">" + esc(x.name) + "</option>").join("");
   const dayCards = days.length ? days.map(day =>
@@ -828,7 +829,10 @@ async function adminDaysContent(comp) {
   return pageTitleHtml("Journées & événements","Configure une durée libre, les récompenses quotidiennes et les événements marketing.") +
     "<div class=\"grid\" style=\"margin-bottom:14px\"><div class=\"card span6\"><div class=\"section-title\"><h2>Durée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/days-resize\"><label>Nombre de jours</label><div class=\"actions\"><input name=\"dayCount\" type=\"number\" min=\"1\" max=\"365\" value=\"" + Math.max(1,days.length||1) + "\" style=\"max-width:160px\"><button class=\"btn\" type=\"submit\">Appliquer</button></div><div class=\"footer-note\">Si des journées à supprimer contiennent déjà des missions, la suppression est bloquée jusqu’à confirmation.</div></form></div>" +
       "<div class=\"card span6\"><div class=\"section-title\"><h2>Nouvelle / mise à jour journée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/day-save\"><div class=\"form-grid\"><div><label>N° jour</label><input name=\"dayNumber\" type=\"number\" min=\"1\" required></div><div><label>Titre</label><input name=\"title\" required placeholder=\"GEMINI TAKEOVER\"></div><div><label>Récompense quotidienne</label><input name=\"rewardDailyPoints\" type=\"number\" value=\"0\"></div><div><label>Statut</label><select name=\"status\"><option value=\"draft\">Brouillon</option><option value=\"scheduled\">Programmé</option><option value=\"active\">Actif</option><option value=\"finished\">Terminé</option></select></div><div class=\"full\"><label>Campagne vedette</label><select name=\"featuredCampaignId\">" + campaignOptions + "</select></div><div class=\"full\"><label>Description</label><textarea name=\"description\"></textarea></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer la journée</button></div></div></form></div></div>" +
-    "<div class=\"grid\">" + dayCards + "</div>";
+    "<div class=\"grid\">" + dayCards + "</div>" +
+    "<div class=\"card\" style=\"margin-top:14px\"><div class=\"section-title\"><h2>Validations de missions</h2><span class=\"small muted\">" + completions.filter(x=>x.status===\"pending\").length + " en attente</span></div><div class=\"table-wrap\"><table><thead><tr><th>Participant</th><th>Mission</th><th>Statut</th><th>Points</th><th>Action</th></tr></thead><tbody>" +
+      (completions.length ? completions.map(x=>"<tr><td>" + esc(x.pseudonym) + "<div class=\"code\">" + esc(x.referral_code||"") + "</div></td><td>" + esc(x.mission_title) + "</td><td>" + esc(x.status) + "</td><td>" + Number(x.points_fixed||0) + "</td><td>" + (x.status===\"pending\" ? "<form method=\"post\" action=\"/api/competition/" + id + "/mission-review\" class=\"actions\"><input type=\"hidden\" name=\"completionId\" value=\"" + esc(x.id) + "\"><button class=\"btn2\" name=\"action\" value=\"confirmed\" type=\"submit\">Confirmer</button><button class=\"danger\" name=\"action\" value=\"rejected\" type=\"submit\">Rejeter</button></form>" : "—") + "</td></tr>").join("") : "<tr><td colspan=\"5\" class=\"empty\">Aucune soumission.</td></tr>") +
+      "</tbody></table></div></div>";
 }
 
 async function adminProspectsContent(comp) {
