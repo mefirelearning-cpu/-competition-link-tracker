@@ -550,6 +550,119 @@ function pointsCardsHtml(rows, comp) {
   ).join("") + "</div>";
 }
 
+
+async function adminCampaignsContent(comp) {
+  const id = encodeURIComponent(comp.id);
+  const campaigns = await listCampaigns(comp.id, {admin:true});
+  const stats = await getCampaignStats(comp.id);
+  const statsById = new Map(stats.map(x => [x.id, x]));
+  const cards = campaigns.length ? campaigns.map(camp => {
+    const s = statsById.get(camp.id) || {};
+    return "<article class=\"card span6\">" +
+      (camp.image_data ? "<img src=\"" + esc(camp.image_data) + "\" alt=\"\" style=\"width:100%;aspect-ratio:16/8;object-fit:cover;border-radius:13px;border:1px solid var(--line);margin-bottom:12px\">" : "") +
+      "<div class=\"section-title\"><div><h2>" + esc(camp.name) + "</h2><div class=\"subnav-note\">" + esc(camp.product || camp.slug) + "</div></div><span class=\"status\">" + esc(camp.status) + "</span></div>" +
+      "<div class=\"metric-grid\" style=\"grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:12px\">" +
+        "<div class=\"stat\"><div class=\"label\">Partages</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.shares||0) + "</div></div>" +
+        "<div class=\"stat\"><div class=\"label\">Intérêts</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.interests||0) + "</div></div>" +
+        "<div class=\"stat\"><div class=\"label\">Leads</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.leads||0) + "</div></div>" +
+        "<div class=\"stat\"><div class=\"label\">Ventes</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.sales||0) + "</div></div>" +
+      "</div>" +
+      "<div class=\"small muted\">Partage +" + Number(camp.points_share||0) + " · Intérêt +" + Number(camp.points_interest||0) + " · Lead +" + Number(camp.points_lead||0) + " · Vente +" + Number(camp.points_sale||0) + "</div>" +
+      "<div class=\"actions\" style=\"margin-top:12px\">" +
+        "<form method=\"post\" action=\"/api/competition/" + id + "/campaign-status\" style=\"display:flex;gap:7px;flex-wrap:wrap\"><input type=\"hidden\" name=\"campaignId\" value=\"" + esc(camp.id) + "\"><select name=\"status\" style=\"width:auto\"><option value=\"draft\"" + (camp.status==="draft"?" selected":"") + ">Brouillon</option><option value=\"scheduled\"" + (camp.status==="scheduled"?" selected":"") + ">Programmé</option><option value=\"active\"" + (camp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (camp.status==="paused"?" selected":"") + ">Pause</option><option value=\"ended\"" + (camp.status==="ended"?" selected":"") + ">Terminée</option></select><button class=\"btn2\" type=\"submit\">Enregistrer</button></form>" +
+        "<form method=\"post\" action=\"/api/competition/" + id + "/campaign-delete\"><input type=\"hidden\" name=\"campaignId\" value=\"" + esc(camp.id) + "\"><button class=\"danger\" type=\"submit\">Retirer</button></form>" +
+      "</div></article>";
+  }).join("") : "<div class=\"card span12 empty\">Aucune campagne. Crée la première ci-dessous.</div>";
+
+  return pageTitleHtml("Affiches & campagnes","Chaque affiche devient une campagne traçable avec son propre barème.") +
+    "<div class=\"grid\" style=\"margin-bottom:14px\">" + cards + "</div>" +
+    "<div class=\"card\"><div class=\"section-title\"><div><h2>Nouvelle campagne</h2><div class=\"subnav-note\">Tous les points et limites restent modifiables depuis l’administration.</div></div></div>" +
+      "<form method=\"post\" action=\"/api/competition/" + id + "/campaign-create\" id=\"campaignCreateForm\"><div class=\"form-grid\">" +
+        "<div><label>Nom</label><input name=\"name\" required placeholder=\"Gemini Pro Promo\"></div>" +
+        "<div><label>Produit</label><input name=\"product\" placeholder=\"Gemini Pro\"></div>" +
+        "<div class=\"full\"><label>Description</label><textarea name=\"description\" placeholder=\"Description de l’offre\"></textarea></div>" +
+        "<div class=\"full\"><label>Texte commercial à copier</label><textarea name=\"commercialText\" placeholder=\"Texte que les participants partageront\"></textarea></div>" +
+        "<div class=\"full\"><label>Affiche</label><input id=\"campaignImageFile\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\"><input type=\"hidden\" id=\"campaignImageData\" name=\"imageData\"><div class=\"footer-note\">L’image est compressée dans le navigateur avant envoi.</div></div>" +
+        "<div><label>URL destination</label><input name=\"destinationUrl\" placeholder=\"https://...\"></div>" +
+        "<div><label>URL WhatsApp éventuelle</label><input name=\"whatsappUrl\" placeholder=\"https://wa.me/...\"></div>" +
+        "<div><label>Points partage</label><input name=\"pointsShare\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Points intérêt</label><input name=\"pointsInterest\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Points lead</label><input name=\"pointsLead\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Points vente</label><input name=\"pointsSale\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Multiplicateur trafic</label><input name=\"multiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"1\"></div>" +
+        "<div><label>Multiplicateur conversion</label><input name=\"conversionMultiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"1\"></div>" +
+        "<div><label>Bonus partage max/jour</label><input name=\"dailyShareLimit\" type=\"number\" min=\"1\" value=\"1\"></div>" +
+        "<div><label>Statut</label><select name=\"status\"><option value=\"draft\">Brouillon</option><option value=\"scheduled\">Programmé</option><option value=\"active\">Active</option></select></div>" +
+        "<div class=\"full\"><label><input type=\"checkbox\" name=\"featured\" value=\"1\" style=\"width:auto;margin-right:7px\"> Campagne vedette</label></div>" +
+        "<div class=\"full\"><button class=\"btn\" type=\"submit\">Créer la campagne</button></div>" +
+      "</div></form></div>";
+}
+
+async function adminDaysContent(comp) {
+  const id = encodeURIComponent(comp.id);
+  const [days,campaigns,config] = await Promise.all([
+    listCompetitionDays(comp.id),
+    listCampaigns(comp.id,{admin:true}),
+    getCompetitionConfig(comp.id)
+  ]);
+  const campaignOptions = "<option value=\"\">Aucune</option>" + campaigns.map(x=>"<option value=\"" + esc(x.id) + "\">" + esc(x.name) + "</option>").join("");
+  const dayCards = days.length ? days.map(day =>
+    "<article class=\"card span6\"><div class=\"section-title\"><div><h2>Jour " + day.day_number + " · " + esc(day.title) + "</h2><div class=\"subnav-note\">" + esc(day.status) + (day.featured_campaign_name ? " · " + esc(day.featured_campaign_name) : "") + "</div></div><span class=\"score-badge\">+" + Number(day.reward_daily_points||0) + " pts</span></div>" +
+      "<p class=\"muted\" style=\"margin-top:0\">" + esc(day.description || "Aucune description.") + "</p>" +
+      "<form method=\"post\" action=\"/api/competition/" + id + "/mission-create\"><input type=\"hidden\" name=\"dayId\" value=\"" + esc(day.id) + "\"><div class=\"form-grid\"><div><label>Mission</label><input name=\"title\" placeholder=\"STATUS TAKEOVER\" required></div><div><label>Points</label><input name=\"pointsFixed\" type=\"number\" value=\"0\"></div><div class=\"full\"><label>Description</label><input name=\"description\" placeholder=\"Action marketing à réaliser\"></div><div><label>Validation</label><select name=\"validationMode\"><option value=\"manual\">Manuelle</option><option value=\"automatic\">Automatique</option></select></div><div><label>Campagne associée</label><select name=\"campaignId\">" + campaignOptions + "</select></div><div class=\"full\"><button class=\"btn2\" type=\"submit\">Ajouter une mission</button></div></div></form></article>"
+  ).join("") : "<div class=\"card span12 empty\">Aucune journée configurée.</div>";
+
+  return pageTitleHtml("Journées & événements","Configure une durée libre, les récompenses quotidiennes et les événements marketing.") +
+    "<div class=\"grid\" style=\"margin-bottom:14px\"><div class=\"card span6\"><div class=\"section-title\"><h2>Durée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/days-resize\"><label>Nombre de jours</label><div class=\"actions\"><input name=\"dayCount\" type=\"number\" min=\"1\" max=\"365\" value=\"" + Math.max(1,days.length||1) + "\" style=\"max-width:160px\"><button class=\"btn\" type=\"submit\">Appliquer</button></div><div class=\"footer-note\">Si des journées à supprimer contiennent déjà des missions, la suppression est bloquée jusqu’à confirmation.</div></form></div>" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Nouvelle / mise à jour journée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/day-save\"><div class=\"form-grid\"><div><label>N° jour</label><input name=\"dayNumber\" type=\"number\" min=\"1\" required></div><div><label>Titre</label><input name=\"title\" required placeholder=\"GEMINI TAKEOVER\"></div><div><label>Récompense quotidienne</label><input name=\"rewardDailyPoints\" type=\"number\" value=\"0\"></div><div><label>Statut</label><select name=\"status\"><option value=\"draft\">Brouillon</option><option value=\"scheduled\">Programmé</option><option value=\"active\">Actif</option><option value=\"finished\">Terminé</option></select></div><div class=\"full\"><label>Campagne vedette</label><select name=\"featuredCampaignId\">" + campaignOptions + "</select></div><div class=\"full\"><label>Description</label><textarea name=\"description\"></textarea></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer la journée</button></div></div></form></div></div>" +
+    "<div class=\"grid\">" + dayCards + "</div>";
+}
+
+async function adminProspectsContent(comp) {
+  const id = encodeURIComponent(comp.id);
+  const prospects = await listProspects(comp.id);
+  const rows = prospects.length ? prospects.map(p =>
+    "<tr><td><div class=\"person\">" + esc(p.reference_code) + "</div><div class=\"code\">" + esc(p.created_at) + "</div></td><td>" + esc(p.campaign_name) + "</td><td>" + esc(p.participant_name || "—") + "</td><td><span class=\"status\">" + esc(p.status) + "</span></td><td>" +
+      (p.lead_id ? "<span class=\"small muted\">Lead confirmé</span>" : "<form method=\"post\" action=\"/api/competition/" + id + "/lead-confirm\"><input type=\"hidden\" name=\"interestId\" value=\"" + esc(p.id) + "\"><button class=\"btn2\" type=\"submit\">Confirmer lead</button></form>") +
+      "</td><td>" +
+      (p.sale_id ? "<span class=\"small muted\">Vente confirmée</span>" : (p.lead_id ? "<form method=\"post\" action=\"/api/competition/" + id + "/sale-confirm\"><input type=\"hidden\" name=\"interestId\" value=\"" + esc(p.id) + "\"><input name=\"amount\" type=\"number\" min=\"0\" step=\"1\" placeholder=\"Montant\" style=\"width:110px\"><button class=\"btn\" type=\"submit\">Confirmer vente</button></form>" : "—")) +
+      "</td><td>" + (p.status==="interest" ? "<form method=\"post\" action=\"/api/competition/" + id + "/interest-reject\"><input type=\"hidden\" name=\"interestId\" value=\"" + esc(p.id) + "\"><button class=\"danger\" type=\"submit\">Rejeter</button></form>" : "") + "</td></tr>"
+  ).join("") : "<tr><td colspan=\"7\" class=\"empty\">Aucun prospect pour le moment.</td></tr>";
+  return pageTitleHtml("Prospects & ventes","Valide les résultats réels. Les intérêts, leads et ventes restent séparés.") +
+    "<div class=\"card\"><div class=\"table-wrap\"><table><thead><tr><th>Référence</th><th>Campagne</th><th>Source</th><th>Statut</th><th>Lead</th><th>Vente</th><th>Action</th></tr></thead><tbody>" + rows + "</tbody></table></div></div>";
+}
+
+async function adminRewardsContent(comp) {
+  const id = encodeURIComponent(comp.id);
+  const [prizes,tiers,config] = await Promise.all([listPrizes(comp.id),listRewardTiers(comp.id),getCompetitionConfig(comp.id)]);
+  const prizeRows = prizes.length ? prizes.map(p=>"<tr><td>" + esc(p.name) + "</td><td>" + esc(p.duration_text||"") + "</td><td>" + esc(p.status) + "</td><td>" + esc(p.chosen_by_name||"—") + "</td></tr>").join("") : "<tr><td colspan=\"4\" class=\"empty\">Aucun lot.</td></tr>";
+  const tierRows = tiers.length ? tiers.map(t=>"<tr><td>" + Number(t.min_points) + "</td><td>" + (t.max_points===null?"∞":Number(t.max_points)) + "</td><td>" + esc(t.reward_type) + "</td><td>" + Number(t.reward_value) + "</td><td>" + (t.validity_days||"—") + "</td></tr>").join("") : "<tr><td colspan=\"5\" class=\"empty\">Aucun palier.</td></tr>";
+  return pageTitleHtml("Récompenses","Gère les lots des gagnants et les paliers des autres participants.") +
+    "<div class=\"grid\"><div class=\"card span6\"><div class=\"section-title\"><h2>Nouveau lot</h2><span class=\"small muted\">Top " + Number(config?.winner_count||1) + "</span></div><form method=\"post\" action=\"/api/competition/" + id + "/prize-add\"><div class=\"form-grid\"><div><label>Lot</label><input name=\"name\" required></div><div><label>Durée</label><input name=\"durationText\" placeholder=\"1 mois\"></div><div class=\"full\"><label>Description</label><input name=\"description\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Ajouter le lot</button></div></div></form></div>" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Nouveau palier</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/tier-add\"><div class=\"form-grid\"><div><label>Minimum points</label><input name=\"minPoints\" type=\"number\" min=\"0\" required></div><div><label>Maximum</label><input name=\"maxPoints\" type=\"number\" min=\"0\" placeholder=\"Vide = infini\"></div><div><label>Type</label><select name=\"rewardType\"><option value=\"discount\">Réduction %</option><option value=\"credit\">Crédit</option><option value=\"custom\">Personnalisé</option></select></div><div><label>Valeur</label><input name=\"rewardValue\" type=\"number\" step=\"0.01\" required></div><div><label>Validité (jours)</label><input name=\"validityDays\" type=\"number\" min=\"1\"></div><div><label>Ordre</label><input name=\"sortOrder\" type=\"number\" value=\"0\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Ajouter le palier</button></div></div></form></div>" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Lots</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Lot</th><th>Durée</th><th>Statut</th><th>Choisi par</th></tr></thead><tbody>" + prizeRows + "</tbody></table></div></div>" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Paliers</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Min</th><th>Max</th><th>Type</th><th>Valeur</th><th>Jours</th></tr></thead><tbody>" + tierRows + "</tbody></table></div></div>" +
+      "<div class=\"card span12\"><div class=\"section-title\"><div><h2>Fin de compétition</h2><div class=\"subnav-note\">Fige le classement final puis génère les coupons selon les paliers.</div></div></div><div class=\"actions\"><form method=\"post\" action=\"/api/competition/" + id + "/finalize\"><button class=\"btn\" type=\"submit\">Figer le classement final</button></form><form method=\"post\" action=\"/api/competition/" + id + "/generate-coupons\"><button class=\"btn2\" type=\"submit\">Générer les coupons</button></form></div></div></div>";
+}
+
+async function adminFraudContent(comp) {
+  const id = encodeURIComponent(comp.id);
+  const [settings,flags] = await Promise.all([getFraudSettings(comp.id),listFraudFlags(comp.id)]);
+  const f = settings || {};
+  const rows = flags.length ? flags.map(flag =>
+    "<tr><td>" + esc(flag.pseudonym||"Visiteur") + "<div class=\"code\">" + esc(flag.referral_code||"") + "</div></td><td>" + Number(flag.risk_score||0).toFixed(2) + "</td><td>" + esc(flag.reason) + "</td><td>" + esc(flag.status) + "</td><td><form method=\"post\" action=\"/api/competition/" + id + "/fraud-resolve\" class=\"actions\"><input type=\"hidden\" name=\"flagId\" value=\"" + esc(flag.id) + "\"><button class=\"btn2\" name=\"action\" value=\"ignored\" type=\"submit\">Ignorer</button><button class=\"btn2\" name=\"action\" value=\"invalidated\" type=\"submit\">Invalider</button><button class=\"danger\" name=\"action\" value=\"suspended\" type=\"submit\">Suspendre</button></form></td></tr>"
+  ).join("") : "<tr><td colspan=\"5\" class=\"empty\">Aucune activité suspecte ouverte.</td></tr>";
+  return pageTitleHtml("Anti-fraude","Déduplication raisonnable, plafonds et revue manuelle des signaux suspects.") +
+    "<div class=\"grid\"><div class=\"card span5\"><div class=\"section-title\"><h2>Réglages</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/fraud-settings\"><div class=\"form-grid\"><div><label>Fenêtre unique (heures)</label><input name=\"uniqueClickWindowHours\" type=\"number\" min=\"1\" value=\"" + Number(f.unique_click_window_hours||2160) + "\"></div><div><label>Cap clics valides/jour</label><input name=\"dailyClickCap\" type=\"number\" min=\"1\" value=\"" + (f.daily_click_cap??"") + "\"></div><div><label>Fenêtre burst (min)</label><input name=\"burstDetectionWindowMinutes\" type=\"number\" min=\"1\" value=\"" + Number(f.burst_detection_window_minutes||5) + "\"></div><div><label>Max clics/visiteur</label><input name=\"maxClicksPerVisitor\" type=\"number\" min=\"1\" value=\"" + Number(f.max_clicks_per_visitor||8) + "\"></div><div><label>Seuil suspect</label><input name=\"suspiciousThreshold\" type=\"number\" min=\"1\" value=\"" + Number(f.suspicious_threshold||20) + "\"></div><div><label>Bots évidents</label><select name=\"blockObviousBots\"><option value=\"1\"" + (f.block_obvious_bots!==false?" selected":"") + ">Ignorer</option><option value=\"0\"" + (f.block_obvious_bots===false?" selected":"") + ">Autoriser</option></select></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer</button></div></div></form></div>" +
+      "<div class=\"card span7\"><div class=\"section-title\"><h2>Activité suspecte</h2><span class=\"small muted\">" + flags.length + " signal(aux)</span></div><div class=\"table-wrap\"><table><thead><tr><th>Source</th><th>Risque</th><th>Raison</th><th>Statut</th><th>Action</th></tr></thead><tbody>" + rows + "</tbody></table></div></div></div>";
+}
+
+async function adminNotificationsContent(comp) {
+  const id = encodeURIComponent(comp.id);
+  return pageTitleHtml("Notifications","Crée une annonce globale visible dans l’espace participant.") +
+    "<div class=\"card\" style=\"max-width:760px\"><form method=\"post\" action=\"/api/competition/" + id + "/announcement\"><div class=\"form-grid\"><div class=\"full\"><label>Titre</label><input name=\"title\" required placeholder=\"Prime Video rapporte x2 aujourd’hui\"></div><div class=\"full\"><label>Message</label><textarea name=\"body\" required></textarea></div><div><label>Type</label><select name=\"kind\"><option value=\"announcement\">Annonce</option><option value=\"boost\">Boost</option><option value=\"warning\">Alerte</option><option value=\"reward\">Récompense</option></select></div><div><label>Lien optionnel</label><input name=\"actionUrl\" placeholder=\"/me/...\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Publier l’annonce</button></div></div></form></div>";
+}
+
 async function competitionPage(origin, comp, view = "overview", publicMode = false, newCode = "") {
   const rows = await getRankedParticipants(comp);
   const profile = await getProfile(comp.id);
