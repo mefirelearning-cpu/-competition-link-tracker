@@ -1,14 +1,26 @@
-import { databaseConfigured, query } from "../lib/db.js";
+function sendJson(res, status, body) {
+  res.statusCode = status;
+  res.setHeader("Content-Type", "application/json; charset=utf-8");
+  res.setHeader("Cache-Control", "no-store");
+  res.end(JSON.stringify(body));
+}
+
+function hasDatabaseUrl() {
+  return Boolean(
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.NEON_DATABASE_URL
+  );
+}
 
 export default async function handler(req, res) {
-  res.setHeader("Cache-Control", "no-store");
-
   if (req.method !== "GET") {
-    return res.status(405).json({ ok: false, error: "method_not_allowed" });
+    return sendJson(res, 405, { ok: false, error: "method_not_allowed" });
   }
 
-  if (!databaseConfigured()) {
-    return res.status(503).json({
+  if (!hasDatabaseUrl()) {
+    return sendJson(res, 503, {
       ok: false,
       postgresConfigured: false,
       message: "PostgreSQL is not connected yet."
@@ -16,8 +28,9 @@ export default async function handler(req, res) {
   }
 
   try {
+    const { query } = await import("../lib/db.js");
     const result = await query("select current_timestamp as now");
-    return res.status(200).json({
+    return sendJson(res, 200, {
       ok: true,
       postgresConfigured: true,
       databaseReachable: true,
@@ -25,7 +38,7 @@ export default async function handler(req, res) {
     });
   } catch (error) {
     console.error("db-health:", error);
-    return res.status(503).json({
+    return sendJson(res, 503, {
       ok: false,
       postgresConfigured: true,
       databaseReachable: false,
