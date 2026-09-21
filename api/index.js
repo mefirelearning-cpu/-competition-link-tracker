@@ -1322,6 +1322,17 @@ export default async function handler(req, res) {
         return send(res, 200, JSON.stringify(result), "application/json; charset=utf-8");
       }
 
+      if (parts[3] === "mission-submit") {
+        const b = parseBody(req);
+        await submitMissionCompletion({
+          competitionId,
+          missionId: String(b.missionId || ""),
+          participantId: session.participant_id,
+          proofData: String(b.proofData || "")
+        });
+        return redirect(res, "/me/" + encodeURIComponent(competitionId), 303);
+      }
+
       if (parts[3] === "prize-select") {
         const b = parseBody(req);
         const result = await selectPrize({
@@ -1439,6 +1450,19 @@ export default async function handler(req, res) {
       if (!await ensureAdminAccess(req, res, "/c/" + encodeURIComponent(id))) return;
       if (req.method === "POST" && !sameOriginRequest(req)) {
         return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+      }
+
+      if (action === "mission-review" && req.method === "POST") {
+        const b = parseBody(req);
+        const result = await reviewMissionCompletion({
+          completionId: String(b.completionId || ""),
+          action: String(b.action || "rejected"),
+          adminId: "admin"
+        });
+        if (result.ok && result.participantId && result.totalPoints !== null && result.totalPoints !== undefined) {
+          await syncRedisPointCacheByParticipantId(result.competitionId || id, result.participantId, result.totalPoints);
+        }
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
       }
 
       if (action === "campaign-create" && req.method === "POST") {
