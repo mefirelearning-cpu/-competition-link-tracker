@@ -998,6 +998,51 @@ async function adminNotificationsContent(comp) {
     "<div class=\"card\" style=\"max-width:760px\"><form method=\"post\" action=\"/api/competition/" + id + "/announcement\"><div class=\"form-grid\"><div class=\"full\"><label>Titre</label><input name=\"title\" required placeholder=\"Prime Video rapporte x2 aujourd’hui\"></div><div class=\"full\"><label>Message</label><textarea name=\"body\" required></textarea></div><div><label>Type</label><select name=\"kind\"><option value=\"announcement\">Annonce</option><option value=\"boost\">Boost</option><option value=\"warning\">Alerte</option><option value=\"reward\">Récompense</option></select></div><div><label>Lien optionnel</label><input name=\"actionUrl\" placeholder=\"/me/...\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Publier l’annonce</button></div></div></form></div>";
 }
 
+
+async function adminAnalyticsContent(comp) {
+  const data=await getCompetitionAnalytics(comp.id);
+  const s=data.summary||{};
+  const maxValid=Math.max(1,...data.daily.map(d=>Number(d.valid_clicks||0)));
+  const dailyRows=data.daily.map(d=>{
+    const width=Math.max(2,Math.round(Number(d.valid_clicks||0)/maxValid*100));
+    return "<tr><td>" + esc(String(d.day)) + "</td><td>" + Number(d.raw_clicks||0) + "</td><td>" + Number(d.unique_clicks||0) + "</td><td><div style=\"display:flex;align-items:center;gap:8px\"><div style=\"height:8px;border-radius:999px;background:#111;width:" + width + "%;min-width:2px\"></div><b>" + Number(d.valid_clicks||0) + "</b></div></td><td>" + Number(d.interests||0) + "</td><td>" + Number(d.leads||0) + "</td><td>" + Number(d.sales||0) + "</td></tr>";
+  }).join("");
+  const campaignRows=data.campaigns.length?data.campaigns.map(x=>{
+    const leads=Number(x.leads||0), interests=Number(x.interests||0), sales=Number(x.sales||0);
+    const conversion=interests?Math.round(sales/interests*1000)/10:0;
+    return "<tr><td><div class=\"person\">" + esc(x.name) + "</div><div class=\"code\">" + esc(x.product||"") + "</div></td><td>" + Number(x.raw_clicks||0) + "</td><td>" + Number(x.unique_clicks||0) + "</td><td>" + Number(x.valid_clicks||0) + "</td><td>" + interests + "</td><td>" + leads + "</td><td>" + sales + "</td><td>" + conversion + "%</td><td>" + Number(x.revenue||0) + " XAF</td></tr>";
+  }).join(""):"<tr><td colspan=\"9\" class=\"empty\">Aucune campagne.</td></tr>";
+  const pointRows=data.pointTypes.length?data.pointTypes.map(x=>"<tr><td>" + esc(x.type) + "</td><td>" + Number(x.transactions||0) + "</td><td class=\"points-col\">" + Number(x.points||0) + "</td></tr>").join(""):"<tr><td colspan=\"3\" class=\"empty\">Aucune transaction de points.</td></tr>";
+
+  return pageTitleHtml("Statistiques","Vue consolidée du trafic, des conversions et des points.") +
+    "<div class=\"metric-grid\">" +
+      "<div class=\"card stat\"><div class=\"label\">Participants</div><div class=\"num\">" + Number(s.participants||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Actifs 24 h</div><div class=\"num\">" + Number(s.active_24h||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Clics bruts</div><div class=\"num\">" + Number(s.raw_clicks||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Visiteurs uniques</div><div class=\"num\">" + Number(s.unique_clicks||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Clics valides</div><div class=\"num\">" + Number(s.valid_clicks||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Intérêts</div><div class=\"num\">" + Number(s.interests||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Prospects</div><div class=\"num\">" + Number(s.leads||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Ventes</div><div class=\"num\">" + Number(s.sales||0) + "</div></div>" +
+      "<div class=\"card stat\"><div class=\"label\">Revenu attribué</div><div class=\"num\" style=\"font-size:20px\">" + Number(s.attributed_revenue||0) + " XAF</div></div>" +
+    "</div>" +
+    "<div class=\"grid\">" +
+      "<div class=\"card span12\"><div class=\"section-title\"><h2>14 derniers jours</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Jour</th><th>Bruts</th><th>Uniques</th><th>Valides</th><th>Intérêts</th><th>Leads</th><th>Ventes</th></tr></thead><tbody>" + dailyRows + "</tbody></table></div></div>" +
+      "<div class=\"card span12\"><div class=\"section-title\"><h2>Performance par campagne</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Campagne</th><th>Bruts</th><th>Uniques</th><th>Valides</th><th>Intérêts</th><th>Leads</th><th>Ventes</th><th>Conv.</th><th>Revenu</th></tr></thead><tbody>" + campaignRows + "</tbody></table></div></div>" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Points générés</h2><span class=\"score-badge\">" + Number(s.points_generated||0) + " pts</span></div><div class=\"table-wrap\"><table><thead><tr><th>Type</th><th>Transactions</th><th>Points</th></tr></thead><tbody>" + pointRows + "</tbody></table></div></div>" +
+    "</div>";
+}
+
+async function adminAuditContent(comp) {
+  const logs=await listAuditLogs(comp.id,400);
+  const rows=logs.length?logs.map(log=>{
+    const when=new Date(log.created_at).toLocaleString("fr-FR");
+    return "<tr><td style=\"white-space:nowrap\">" + esc(when) + "</td><td><div class=\"person\">" + esc(log.action) + "</div><div class=\"code\">" + esc(log.entity_type) + (log.entity_id?" · "+esc(log.entity_id):"") + "</div></td><td>" + esc(log.description||"") + "</td><td>" + esc(log.admin_id||"admin") + "</td></tr>";
+  }).join(""):"<tr><td colspan=\"4\" class=\"empty\">Aucune action journalisée.</td></tr>";
+  return pageTitleHtml("Journal administrateur","Historique horodaté des opérations sensibles et modifications de configuration.") +
+    "<div class=\"card\"><div class=\"section-title\"><h2>Actions récentes</h2><span class=\"small muted\">" + logs.length + " entrée(s)</span></div><div class=\"table-wrap\"><table><thead><tr><th>Date</th><th>Action</th><th>Description</th><th>Acteur</th></tr></thead><tbody>" + rows + "</tbody></table></div></div>";
+}
+
 async function competitionPage(origin, comp, view = "overview", publicMode = false, newCode = "") {
   const rows = await getRankedParticipants(comp);
   const profile = await getProfile(comp.id);
