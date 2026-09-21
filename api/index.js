@@ -1253,11 +1253,101 @@ export default async function handler(req, res) {
       return redirect(res, "/me/" + encodeURIComponent(session.competition_id), 302);
     }
 
+    if (path.startsWith("offer/")) {
+      const parts = path.split("/").map(decodeURIComponent);
+      if (parts.length < 4) return send(res, 404, "Lien incomplet", "text/plain; charset=utf-8");
+      return campaignOfferPage(origin, req, res, parts[1], parts[2], parts[3]);
+    }
+
+    if (path.startsWith("interest/")) {
+      if (req.method !== "POST") return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
+      if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+      const parts = path.split("/").map(decodeURIComponent);
+      if (parts.length < 4) return send(res, 404, "Lien incomplet", "text/plain; charset=utf-8");
+      const competitionId = parts[1], campaignSlug = parts[2], referralCode = parts[3];
+      const campaign = await getCampaignBySlug(competitionId, campaignSlug);
+      if (!campaign || campaign.status !== "active") return send(res, 404, "Campagne indisponible", "text/plain; charset=utf-8");
+      const identity = getVisitorIdentity(req, res);
+      const result = await createInterest({
+        competitionId,
+        campaignId: campaign.id,
+        referralCode,
+        visitorHash: identity.visitorHash
+      });
+      if (!result.ok) return send(res, 400, "Impossible d’enregistrer cet intérêt.", "text/plain; charset=utf-8");
+      if (result.participantId && result.totalPoints !== null && result.totalPoints !== undefined) {
+        await syncRedisPointCacheByParticipantId(competitionId, result.participantId, result.totalPoints);
+      }
+      return redirect(res, whatsappInterestUrl(campaign, result.referenceCode), 303);
+    }
+
+    if (path.startsWith("api/me/")) {
+      const parts = path.split("/").map(decodeURIComponent);
+      const competitionId = parts[2] || "";
+      const session = await getParticipantSession(req, competitionId);
+      if (!session) return send(res, 401, "Session participant requise", "text/plain; charset=utf-8");
+      if (req.method !== "POST") return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
+      if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+
+      if (parts[3] === "daily-claim") {
+        const b = parseBody(req);
+        const result = await claimDailyReward({
+          competitionId,
+          dayId: String(b.dayId || ""),
+          participantId: session.participant_id
+        });
+        if (result.ok && result.totalPoints !== null && result.totalPoints !== undefined) {
+          await syncRedisPointCacheByParticipantId(competitionId, session.participant_id, result.totalPoints);
+        }
+        return redirect(res, "/me/" + encodeURIComponent(competitionId), 303);
+      }
+
+      if (parts[3] === "campaign" && parts[5] === "share") {
+        const campaignId = parts[4] || "";
+        const b = parseBody(req);
+        const result = await recordCampaignShare({
+          competitionId,
+          campaignId,
+          participantId: session.participant_id,
+          channel: b.channel || "generic"
+        });
+        if (result.ok && result.totalPoints !== null && result.totalPoints !== undefined) {
+          await syncRedisPointCacheByParticipantId(competitionId, session.participant_id, result.totalPoints);
+        }
+        return send(res, 200, JSON.stringify(result), "application/json; charset=utf-8");
+      }
+
+      if (parts[3] === "prize-select") {
+        const b = parseBody(req);
+        const result = await selectPrize({
+          competitionId,
+          participantId: session.participant_id,
+          prizeId: String(b.prizeId || ""),
+          selectedBy: "participant"
+        });
+        if (!result.ok) {
+          const msg = result.reason === "wait_previous_winners"
+            ? "Les gagnants mieux classés doivent choisir leur lot avant toi."
+            : "Ce lot n’est pas disponible pour le moment.";
+          return send(res, 409, participantShell("Choix indisponible", participantTop(session) + "<div class=\"p-card\"><h2>" + esc(msg) + "</h2><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(competitionId) + "/rewards\">Retour</a></div>" + participantBottom(session,"rewards")));
+        }
+        return redirect(res, "/me/" + encodeURIComponent(competitionId) + "/rewards", 303);
+      }
+
+      return send(res, 404, "Action inconnue", "text/plain; charset=utf-8");
+    }
+
     if (path.startsWith("me/")) {
-      const competitionId = decodeURIComponent(path.slice("me/".length));
+      const parts = path.split("/").map(decodeURIComponent);
+      const competitionId = parts[1] || "";
+      const view = parts[2] || "home";
       const session = await getParticipantSession(req, competitionId);
       if (!session) return redirect(res, "/participant/login", 303);
-      return send(res, 200, await participantDashboardPage(origin, session));
+      if (view === "home") return send(res, 200, await participantDashboardPage(origin, session));
+      if (view === "campaigns") return send(res, 200, await participantCampaignsPage(origin, session));
+      if (view === "rewards") return send(res, 200, await participantRewardsPage(origin, session));
+      if (view === "rules") return send(res, 200, await participantRulesPage(session));
+      return send(res, 404, "Rubrique introuvable", "text/plain; charset=utf-8");
     }
 
     if (path === "admin") {
