@@ -432,6 +432,34 @@ function participantLoginPage(message = "") {
   return participantShell("Connexion participant", body);
 }
 
+async function participantPreviewStandalone(origin, comp) {
+  const rows=await getRankedParticipants(comp);
+  const sample=rows[0]||{name:"Participant",code:"preview",rank:"—",points:0,clicks:0,unique:0,valid:0};
+  const [day,campaigns,config]=await Promise.all([
+    getActiveDay(comp.id).catch(()=>null),
+    listCampaigns(comp.id).catch(()=>[]),
+    getCompetitionConfig(comp.id).catch(()=>null)
+  ]);
+  const featured=campaigns.find(x=>x.featured)||campaigns[0]||null;
+  const remaining=config?.ends_at?Math.max(0,new Date(config.ends_at).getTime()-Date.now()):null;
+  const remainingText=remaining===null?"Non défini":Math.floor(remaining/86400000)+"j "+Math.floor((remaining%86400000)/3600000)+"h";
+
+  const body =
+    "<div class=\"p-top\"><div class=\"p-brand\"><span class=\"p-mark\">CL</span><span>Aperçu participant</span></div><span class=\"p-notice\" style=\"padding:7px 10px\">Mode aperçu · aucune action n’est enregistrée</span></div>" +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Mon espace · " + esc(comp.name) + "</div><h1>" + esc(sample.name) + "</h1><p>Temps restant : " + esc(remainingText) + ".</p></section>" +
+    "<div class=\"p-grid\">" +
+      "<div class=\"p-card p-span4\"><div class=\"p-stat\"><span>Position</span><div class=\"p-rank\">#" + esc(sample.rank) + "</div></div></div>" +
+      "<div class=\"p-card p-span4 p-stat\"><span>Points</span><b>" + Number(sample.points||0) + "</b></div>" +
+      "<div class=\"p-card p-span4 p-stat\"><span>Clics valides</span><b>" + Number(sample.valid||0) + "</b></div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Récompense quotidienne</div><div style=\"font-size:42px;font-weight:950;letter-spacing:-.06em;margin:7px 0\">+" + Number(day?.reward_daily_points||0) + " pts</div><button class=\"p-btn\" type=\"button\" disabled>Récupérer</button></div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Événement du jour</div><h2 style=\"font-size:25px;margin:7px 0 8px\">" + esc(day?.title||"Aucun événement actif") + "</h2><p class=\"p-muted\">" + esc(day?.description||"La mission du jour apparaîtra ici.") + "</p></div>" +
+      (featured ? "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Campagne vedette</h2><span class=\"p-small p-muted\">" + esc(featured.product||"") + "</span></div>" + (featured.image_data?"<img src=\"" + esc(featured.image_data) + "\" alt=\"\" style=\"width:100%;max-height:420px;object-fit:contain;border-radius:12px;background:#f4f4f1\">":"") + "<p class=\"p-muted\">" + esc(featured.description||"") + "</p><div class=\"p-actions\"><button class=\"p-btn\" type=\"button\" disabled>Partager</button><button class=\"p-btn2\" type=\"button\" disabled>Copier le lien</button></div></div>":"") +
+    "</div>" +
+    "<nav class=\"p-bottom\"><a class=\"active\" href=\"#\">Accueil</a><a href=\"#\">Campagnes</a><a href=\"#\">Classement</a><a href=\"#\">Récompenses</a><a href=\"#\">Règlement</a></nav>";
+
+  return participantShell("Aperçu participant — "+comp.name,body);
+}
+
 async function participantDashboardPage(origin, session) {
   const comp = await findCompetition(session.competition_id);
   if (!comp) return participantShell("Compétition introuvable", participantTop(session) + "<div class=\"p-card\">Compétition introuvable.</div>");
@@ -825,6 +853,7 @@ function competitionSidebar(comp, view, profile) {
     ["rewards","Récompenses","/c/" + id + "/rewards"],
     ["fraud","Anti-fraude","/c/" + id + "/fraud"],
     ["notifications","Notifications","/c/" + id + "/notifications"],
+    ["preview","Aperçu participant","/c/" + id + "/preview"],
     ["analytics","Statistiques","/c/" + id + "/analytics"],
     ["audit","Journal admin","/c/" + id + "/audit"],
     ["settings","Paramètres","/c/" + id + "/settings"]
@@ -1227,6 +1256,9 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
       "</div>" +
       "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Attribuer des points</h2><div class=\"subnav-note\">Chaque correction crée une transaction historisée avec motif obligatoire.</div></div></div>" + pointsCardsHtml(activeAdminParticipants, comp) + "</div>" +
       "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + adminParticipants.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Points</th><th>Bruts</th><th>Personnes</th><th>Valides</th><th>Statut</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(adminParticipants, comp) + "</tbody></table></div></div>";
+  } else if (view === "preview") {
+    content = pageTitleHtml("Aperçu participant","Prévisualisation en lecture seule de l’expérience participant.") +
+      "<div class=\"card\"><div class=\"actions\" style=\"margin-bottom:12px\"><a class=\"btn2\" target=\"_blank\" href=\"/preview/" + id + "\">Ouvrir en plein écran</a></div><iframe title=\"Aperçu participant\" src=\"/preview/" + id + "\" style=\"width:100%;min-height:820px;border:1px solid var(--line);border-radius:16px;background:#fff\"></iframe></div>";
   } else if (view === "analytics") {
     content = await adminAnalyticsContent(comp);
   } else if (view === "audit") {
@@ -1658,12 +1690,20 @@ export default async function handler(req, res) {
       return send(res, 200, await dashboardPage(origin));
     }
 
+    if (path.startsWith("preview/")) {
+      if (!await ensureAdminAccess(req,res,"/admin")) return;
+      const id=decodeURIComponent(path.slice("preview/".length));
+      const comp=await findCompetition(id);
+      if(!comp) return send(res,404,"Compétition introuvable","text/plain; charset=utf-8");
+      return send(res,200,await participantPreviewStandalone(origin,comp));
+    }
+
     if (path.startsWith("c/")) {
       if (!await ensureAdminAccess(req, res, "/" + path)) return;
       const parts = path.split("/").map(decodeURIComponent);
       const id = parts[1] || "";
       const view = parts[2] || "overview";
-      const allowedViews = ["overview","links","ranking","live","participants","campaigns","days","prospects","scoring","rewards","fraud","notifications","analytics","audit","settings"];
+      const allowedViews = ["overview","links","ranking","live","participants","campaigns","days","prospects","scoring","rewards","fraud","notifications","preview","analytics","audit","settings"];
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
       if (!allowedViews.includes(view)) return send(res, 404, "Rubrique introuvable", "text/plain; charset=utf-8");
