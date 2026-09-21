@@ -1035,6 +1035,44 @@ export default async function handler(req, res) {
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
+      if (action === "scoring-rule" && req.method === "POST") {
+        const b = parseBody(req);
+        await updateValidClickRule({
+          competitionId: id,
+          enabled: String(b.enabled || "") === "1",
+          basePoints: b.basePoints,
+          multiplier: b.multiplier,
+          dailyCapPoints: b.dailyCapPoints,
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/scoring", 303);
+      }
+
+      if (action === "burst-add" && req.method === "POST") {
+        const b = parseBody(req);
+        await createBurstRule({
+          competitionId: id,
+          name: b.name,
+          threshold: b.threshold,
+          windowMinutes: b.windowMinutes,
+          bonusPoints: b.bonusPoints,
+          dailyLimit: b.dailyLimit,
+          enabled: true,
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/scoring", 303);
+      }
+
+      if (action === "burst-delete" && req.method === "POST") {
+        const b = parseBody(req);
+        await deleteBurstRule({
+          competitionId: id,
+          ruleId: String(b.ruleId || ""),
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/scoring", 303);
+      }
+
       if (action === "points" && req.method === "POST") {
         const b = parseBody(req);
         const code = String(b.code || "").trim();
