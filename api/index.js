@@ -1117,10 +1117,20 @@ async function registerClick(comp, participant, req, res) {
   return tracked;
 }
 
-async function apiStats(res, comp) {
+async function apiStats(req, res, comp) {
   const participants = await getRankedParticipants(comp);
+  const config = await getCompetitionConfig(comp.id).catch(()=>null);
+  const admin = await getAdminSession(req).catch(()=>null);
+  const hidden = config && config.leaderboard_visible === false && !admin;
+  const frozen = config && config.leaderboard_frozen === true && config.status !== "completed" && !admin;
   return send(res, 200, JSON.stringify({
-    competition: {id:comp.id,name:comp.name,status:comp.status},
+    competition: {
+      id:comp.id,
+      name:comp.name,
+      status:comp.status,
+      leaderboardVisible: !hidden,
+      leaderboardFrozen: Boolean(frozen)
+    },
     totals: {
       participants: participants.length,
       points: participants.reduce((s,r)=>s+r.points,0),
@@ -1128,7 +1138,7 @@ async function apiStats(res, comp) {
       unique: participants.reduce((s,r)=>s+r.unique,0),
       valid: participants.reduce((s,r)=>s+r.valid,0)
     },
-    participants
+    participants: hidden || frozen ? [] : participants
   }), "application/json; charset=utf-8");
 }
 
@@ -1411,6 +1421,17 @@ export default async function handler(req, res) {
       const id = decodeURIComponent(path.slice("leaderboard/".length));
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
+      const config = await getCompetitionConfig(id).catch(()=>null);
+      if (config?.leaderboard_visible === false) {
+        return send(res, 200, participantShell("Classement masqué",
+          "<div style=\"max-width:760px;margin:0 auto;padding:28px 12px\"><div class=\"p-card\"><div class=\"p-kicker\" style=\"color:#666\">Classement</div><h1 style=\"font-size:34px;letter-spacing:-.04em\">Classement temporairement masqué</h1><p class=\"p-muted\">L’administrateur a désactivé l’affichage public du classement.</p></div></div>"
+        ));
+      }
+      if (config?.leaderboard_frozen === true && config?.status !== "completed") {
+        return send(res, 200, participantShell("Classement gelé",
+          "<div style=\"max-width:760px;margin:0 auto;padding:28px 12px\"><div class=\"p-card\"><div class=\"p-kicker\" style=\"color:#666\">Classement</div><h1 style=\"font-size:34px;letter-spacing:-.04em\">Classement temporairement gelé</h1><p class=\"p-muted\">Les positions exactes sont masquées pour le moment. Les activités valides continuent d’être enregistrées.</p></div></div>"
+        ));
+      }
       return send(res, 200, await competitionPage(origin, comp, "ranking", true));
     }
 
@@ -1469,7 +1490,7 @@ export default async function handler(req, res) {
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
 
-      if (action === "stats" && req.method === "GET") return apiStats(res, comp);
+      if (action === "stats" && req.method === "GET") return apiStats(req, res, comp);
 
       if (!await ensureAdminAccess(req, res, "/c/" + encodeURIComponent(id))) return;
       if (req.method === "POST" && !sameOriginRequest(req)) {
