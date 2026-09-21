@@ -130,23 +130,55 @@ async function getStats(id, code) {
 }
 
 async function getRankedParticipants(comp) {
-  const participants = await getParticipants(comp.id);
-  const rows = await Promise.all(participants.map(async (p) => {
-    const s = await getStats(comp.id, p.code);
-    return {
-      name: p.name,
-      code: p.code,
-      active: p.active !== false,
-      createdAt: p.createdAt,
-      clicks: s.clicks,
-      unique: s.unique,
-      valid: s.valid,
-      points: s.points,
-      link: "/r/" + comp.id + "/" + p.code
-    };
-  }));
-  rows.sort((a,b) => b.points - a.points || b.valid - a.valid || b.unique - a.unique || b.clicks - a.clicks || a.name.localeCompare(b.name));
-  return rows.map((r,i) => ({...r, rank:i+1}));
+  try {
+    const result = await query(
+      `SELECT p.pseudonym AS name,
+              cp.referral_code AS code,
+              cp.status,
+              cp.joined_at,
+              cp.raw_clicks_cache AS clicks,
+              cp.unique_clicks_cache AS unique_clicks,
+              cp.valid_clicks_cache AS valid_clicks,
+              cp.total_points_cache AS points,
+              cp.rank_cache
+       FROM competition_participants cp
+       JOIN participants p ON p.id = cp.participant_id
+       WHERE cp.competition_id = $1
+         AND cp.status = 'active'
+         AND p.status = 'active'
+       ORDER BY cp.total_points_cache DESC,
+                cp.valid_clicks_cache DESC,
+                cp.unique_clicks_cache DESC,
+                cp.raw_clicks_cache DESC,
+                cp.joined_at ASC`,
+      [comp.id]
+    );
+    return result.rows.map((r,i)=>({
+      name:r.name,
+      code:r.code,
+      active:true,
+      createdAt:r.joined_at,
+      clicks:Number(r.clicks||0),
+      unique:Number(r.unique_clicks||0),
+      valid:Number(r.valid_clicks||0),
+      points:Number(r.points||0),
+      link:"/r/" + comp.id + "/" + r.code,
+      rank: comp.status === "ended" && r.rank_cache ? Number(r.rank_cache) : i+1
+    }));
+  } catch (error) {
+    console.error("postgres-ranking-fallback:", error);
+    const participants = await getParticipants(comp.id);
+    const rows = await Promise.all(participants.filter(p=>p.active!==false).map(async (p) => {
+      const s = await getStats(comp.id, p.code);
+      return {
+        name:p.name,code:p.code,active:true,createdAt:p.createdAt,
+        clicks:s.clicks,unique:s.unique,valid:s.valid,points:s.points,
+        link:"/r/" + comp.id + "/" + p.code
+      };
+    }));
+    rows.sort((a,b)=>b.points-a.points||b.valid-a.valid||b.unique-a.unique||b.clicks-a.clicks||a.name.localeCompare(b.name));
+    return rows.map((r,i)=>({...r,rank:i+1}));
+  }
 }
 
 async function ensureLegacyMigration() {
