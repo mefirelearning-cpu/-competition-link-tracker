@@ -1,6 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipants, shadowWithdrawParticipant, shadowSyncStats, shadowRecordAdminAdjustment, shadowSyncCompetitionSettings } from "../lib/shadow-store.js";
 import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdminSession, destroyAdminSession, sameOriginRequest, loginNextPath } from "../lib/admin-auth.js";
+import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
 const PREFIX = "ctl:v2";
@@ -250,6 +251,90 @@ async function ensureAdminAccess(req, res, nextPath) {
   if (session) return true;
   redirect(res, "/admin/login?next=" + encodeURIComponent(loginNextPath(nextPath)), 303);
   return false;
+}
+
+
+function participantShell(title, body, extraScript = "") {
+  return "<!doctype html><html lang=\"fr\"><head><meta charset=\"utf-8\">" +
+    "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1,viewport-fit=cover\">" +
+    "<meta name=\"theme-color\" content=\"#111111\"><title>" + esc(title) + "</title>" +
+    "<style>" +
+    ":root{--p-bg:#f5f5f2;--p-card:#fff;--p-text:#101010;--p-muted:#6d6d6d;--p-line:#deded8;--p-accent:#111;--p-ok:#157347}" +
+    "*{box-sizing:border-box}body{margin:0;background:var(--p-bg);color:var(--p-text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif}" +
+    "a{text-decoration:none;color:inherit}.p-wrap{width:min(1180px,calc(100% - 24px));margin:0 auto;padding:18px 0 90px}.p-top{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 0 18px}.p-brand{display:flex;align-items:center;gap:10px;font-weight:900;letter-spacing:-.02em}.p-mark{width:32px;height:32px;border-radius:10px;background:#111;color:#fff;display:grid;place-items:center;font-size:13px}.p-nav{display:flex;gap:8px;align-items:center}.p-btn,.p-btn2{border:0;border-radius:11px;padding:11px 14px;font:inherit;font-weight:800;cursor:pointer;display:inline-flex;align-items:center;justify-content:center}.p-btn{background:#111;color:#fff}.p-btn2{background:#fff;color:#111;border:1px solid var(--p-line)}.p-card{background:#fff;border:1px solid var(--p-line);border-radius:16px;padding:18px}.p-hero{background:#111;color:#fff;border-radius:20px;padding:24px;margin-bottom:14px}.p-hero h1{font-size:clamp(30px,6vw,54px);line-height:.98;letter-spacing:-.05em;margin:8px 0 10px}.p-hero p{color:#c9c9c9;margin:0;max-width:720px;line-height:1.5}.p-kicker{font-size:11px;letter-spacing:.12em;text-transform:uppercase;font-weight:900;color:#a8a8a8}.p-grid{display:grid;grid-template-columns:repeat(12,1fr);gap:12px}.p-span12{grid-column:span 12}.p-span8{grid-column:span 8}.p-span6{grid-column:span 6}.p-span4{grid-column:span 4}.p-stat b{display:block;font-size:28px;letter-spacing:-.04em;margin-top:4px}.p-stat span{font-size:11px;color:var(--p-muted);font-weight:800;text-transform:uppercase;letter-spacing:.06em}.p-link{font:12px ui-monospace,SFMono-Regular,Menlo,monospace;background:#f6f6f3;border:1px solid var(--p-line);border-radius:10px;padding:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.p-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}.p-title{display:flex;justify-content:space-between;gap:12px;align-items:center;margin-bottom:12px}.p-title h2{margin:0;font-size:18px;letter-spacing:-.02em}.p-muted{color:var(--p-muted)}.p-small{font-size:12px}.p-form{display:grid;gap:12px}.p-form label{display:block;font-size:12px;font-weight:800;margin-bottom:6px}.p-form input{width:100%;border:1px solid var(--p-line);background:#fff;border-radius:11px;padding:12px 13px;font:inherit;outline:none}.p-form input:focus{border-color:#111;box-shadow:0 0 0 3px #0000000c}.p-notice{border:1px solid var(--p-line);background:#fafaf8;border-radius:12px;padding:12px 14px;font-size:12px;line-height:1.5}.p-success{border-color:#b9d8c7;background:#f3fbf6}.p-error{border-color:#efc7c2;background:#fff7f6}.p-code{font:900 34px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em}.p-bottom{display:none}.p-rank{font-size:60px;font-weight:950;letter-spacing:-.07em;line-height:.9}" +
+    "@media(max-width:760px){.p-wrap{width:calc(100% - 18px);padding-bottom:96px}.p-top .p-nav{display:none}.p-grid{grid-template-columns:repeat(2,1fr)}.p-span12,.p-span8,.p-span6,.p-span4{grid-column:1/-1}.p-card{padding:15px}.p-hero{padding:20px}.p-hero h1{font-size:38px}.p-stat{grid-column:span 1}.p-stat b{font-size:24px}.p-bottom{position:fixed;display:grid;grid-template-columns:repeat(3,1fr);left:9px;right:9px;bottom:9px;background:#111;color:#fff;border-radius:16px;padding:6px;z-index:50}.p-bottom a{padding:10px 6px;text-align:center;font-size:11px;font-weight:800;border-radius:10px}.p-bottom a.active{background:#fff;color:#111}.p-actions .p-btn,.p-actions .p-btn2{flex:1 1 auto}.p-code{font-size:28px}}" +
+    "</style></head><body><div class=\"p-wrap\">" + body + "</div>" +
+    (extraScript ? "<script>" + extraScript + "</script>" : "") +
+    "</body></html>";
+}
+
+function participantTop(session = null) {
+  return "<div class=\"p-top\"><a class=\"p-brand\" href=\"" + (session ? "/me/" + encodeURIComponent(session.competition_id) : "/participant/login") + "\"><span class=\"p-mark\">CL</span><span>Competition Link Tracker</span></a>" +
+    "<div class=\"p-nav\">" +
+      (session ? "<a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(session.competition_id) + "\">Classement</a><form method=\"post\" action=\"/participant/logout\" style=\"margin:0\"><button class=\"p-btn2\" type=\"submit\">Déconnexion</button></form>" : "<a class=\"p-btn2\" href=\"/participant/login\">Se connecter</a>") +
+    "</div></div>";
+}
+
+function participantBottom(session) {
+  if (!session) return "";
+  const id = encodeURIComponent(session.competition_id);
+  return "<nav class=\"p-bottom\"><a class=\"active\" href=\"/me/" + id + "\">Mon espace</a><a href=\"/leaderboard/" + id + "\">Classement</a><a href=\"/r/" + id + "/" + encodeURIComponent(session.referral_code) + "\">Mon lien</a></nav>";
+}
+
+function joinPage(comp, message = "", values = {}) {
+  const body = participantTop(null) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Inscription ouverte</div><h1>" + esc(comp.name) + "</h1><p>Crée ton accès en quelques secondes et reçois immédiatement ton lien personnel de participation.</p></section>" +
+    "<div class=\"p-grid\"><div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Participer</h2><span class=\"p-small p-muted\">" + Number(comp.participant_count || 0) + " participant(s)</span></div>" +
+      (message ? "<div class=\"p-notice p-error\" style=\"margin-bottom:12px\">" + esc(message) + "</div>" : "") +
+      "<form class=\"p-form\" method=\"post\" action=\"/join/" + encodeURIComponent(comp.id) + "\">" +
+        "<div><label>Pseudo</label><input name=\"pseudonym\" maxlength=\"40\" value=\"" + esc(values.pseudonym || "") + "\" placeholder=\"Ex. TONNY92\" required></div>" +
+        "<div><label>Numéro WhatsApp</label><input name=\"whatsapp\" inputmode=\"tel\" autocomplete=\"tel\" value=\"" + esc(values.whatsapp || "") + "\" placeholder=\"Ex. +237 6XX XXX XXX\" required></div>" +
+        "<button class=\"p-btn\" type=\"submit\">Participer maintenant</button>" +
+      "</form><div class=\"p-small p-muted\" style=\"margin-top:12px\">Ton numéro WhatsApp reste privé et n’apparaît jamais dans le classement public.</div></div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Comment ça marche</h2></div><div class=\"p-notice\">Après ton inscription, la plateforme crée ton lien personnel. Tu peux le partager à tes contacts et suivre ton rang, tes points et l’activité générée depuis ton espace.</div><div class=\"p-actions\"><a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(comp.id) + "\">Voir le classement</a><a class=\"p-btn2\" href=\"/participant/login\">J’ai déjà un compte</a></div></div></div>";
+  return participantShell("Participer — " + comp.name, body);
+}
+
+function joinSuccessPage(result, origin) {
+  const link = origin + "/r/" + result.competitionId + "/" + result.referralCode;
+  const body = participantTop({competition_id:result.competitionId,referral_code:result.referralCode}) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Inscription confirmée</div><h1>Bienvenue, " + esc(result.pseudonym) + ".</h1><p>Ton accès et ton lien personnel sont prêts.</p></section>" +
+    "<div class=\"p-grid\"><div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Ton code privé</h2></div><div class=\"p-code\">" + esc(result.accessCode) + "</div><div class=\"p-notice p-success\" style=\"margin-top:12px\">Conserve ce code. Il te permettra de te reconnecter avec ton numéro WhatsApp.</div></div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Ton lien personnel</h2></div><div class=\"p-link\">" + esc(link) + "</div><div class=\"p-actions\"><button class=\"p-btn copy-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Copier le lien</button><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(result.competitionId) + "\">Ouvrir mon espace</a></div></div></div>";
+  const script = "document.addEventListener('click',async e=>{const b=e.target.closest('.copy-participant-link');if(!b)return;try{await navigator.clipboard.writeText(b.dataset.link);b.textContent='Copié ✓'}catch{prompt('Copie ce lien :',b.dataset.link)}});";
+  return participantShell("Inscription confirmée", body, script);
+}
+
+function participantLoginPage(message = "") {
+  const body = participantTop(null) +
+    "<div style=\"min-height:68vh;display:grid;place-items:center\"><div class=\"p-card\" style=\"width:min(440px,100%)\"><div class=\"p-kicker\" style=\"color:#666\">Espace participant</div><h1 style=\"font-size:32px;letter-spacing:-.04em;margin:8px 0 10px\">Connexion</h1><p class=\"p-muted\" style=\"margin:0 0 16px\">Utilise ton numéro WhatsApp et le code privé reçu lors de ton inscription.</p>" +
+    (message ? "<div class=\"p-notice p-error\" style=\"margin-bottom:12px\">" + esc(message) + "</div>" : "") +
+    "<form class=\"p-form\" method=\"post\" action=\"/participant/login\"><div><label>Numéro WhatsApp</label><input name=\"whatsapp\" inputmode=\"tel\" autocomplete=\"tel\" required></div><div><label>Code privé</label><input name=\"code\" inputmode=\"numeric\" maxlength=\"6\" autocomplete=\"one-time-code\" required></div><button class=\"p-btn\" type=\"submit\">Se connecter</button></form></div></div>";
+  return participantShell("Connexion participant", body);
+}
+
+async function participantDashboardPage(origin, session) {
+  const comp = await findCompetition(session.competition_id);
+  if (!comp) return participantShell("Compétition introuvable", participantTop(session) + "<div class=\"p-card\">Compétition introuvable.</div>");
+
+  const rows = await getRankedParticipants(comp);
+  const row = rows.find(r => r.code === session.referral_code);
+  const rank = row?.rank || "—";
+  const points = row?.points || 0;
+  const clicks = row?.clicks || 0;
+  const unique = row?.unique || 0;
+  const link = origin + "/r/" + comp.id + "/" + session.referral_code;
+
+  const body = participantTop(session) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Mon espace · " + esc(comp.name) + "</div><h1>" + esc(session.pseudonym) + "</h1><p>Retrouve ici ton rang, tes points et ton lien personnel.</p></section>" +
+    "<div class=\"p-grid\"><div class=\"p-card p-span4\"><div class=\"p-stat\"><span>Position</span><div class=\"p-rank\">#" + esc(rank) + "</div></div></div>" +
+      "<div class=\"p-card p-span4 p-stat\"><span>Points</span><b>" + points + "</b></div><div class=\"p-card p-span4 p-stat\"><span>Visiteurs uniques</span><b>" + unique + "</b></div>" +
+      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Ton lien personnel</h2><span class=\"p-small p-muted\">" + clicks + " clic(s)</span></div><div class=\"p-link\">" + esc(link) + "</div><div class=\"p-actions\"><button class=\"p-btn copy-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Copier</button><button class=\"p-btn2 share-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Partager</button></div></div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Classement</h2></div><p class=\"p-muted\" style=\"margin:0\">Consulte le classement public pour voir ta position par rapport aux autres participants.</p><div class=\"p-actions\"><a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(comp.id) + "\">Voir le classement</a></div></div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Prochaine étape</h2></div><div class=\"p-notice\">Les affiches, campagnes, récompenses quotidiennes et missions seront ajoutées ici progressivement, sans changer ton lien actuel.</div></div></div>" +
+      participantBottom(session);
+  const script = "document.addEventListener('click',async e=>{const c=e.target.closest('.copy-participant-link');if(c){try{await navigator.clipboard.writeText(c.dataset.link);c.textContent='Copié ✓'}catch{prompt('Copie ce lien :',c.dataset.link)}return}const s=e.target.closest('.share-participant-link');if(s){if(navigator.share){try{await navigator.share({title:'Mon lien de compétition',url:s.dataset.link})}catch{}}else{try{await navigator.clipboard.writeText(s.dataset.link);alert('Lien copié')}catch{prompt('Copie ce lien :',s.dataset.link)}}}});";
+  return participantShell("Mon espace — " + comp.name, body, script);
 }
 
 
