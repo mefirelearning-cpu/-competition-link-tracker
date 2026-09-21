@@ -1,4 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
+import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipants, shadowWithdrawParticipant, shadowSyncStats, shadowRecordAdminAdjustment, shadowSyncCompetitionSettings } from "../lib/shadow-store.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
 const PREFIX = "ctl:v2";
@@ -533,6 +534,9 @@ async function registerClick(comp, participant, req) {
   if (first === "OK") {
     await redis(["HINCRBY", statsKey(comp.id, participant.code), "unique", 1]);
   }
+
+  const updatedStats = await getStats(comp.id, participant.code);
+  await shadowSyncStats(comp.id, participant.code, updatedStats);
 }
 
 async function apiStats(res, comp) {
@@ -623,6 +627,7 @@ export default async function handler(req, res) {
       comps.unshift(comp);
       await saveCompetitions(comps);
       await saveParticipants(id, []);
+      await shadowUpsertCompetition(comp);
       return redirect(res, "/c/" + encodeURIComponent(id), 303);
     }
 
@@ -641,8 +646,10 @@ export default async function handler(req, res) {
         if (!name) return send(res, 400, "Nom requis", "text/plain; charset=utf-8");
         const code = await uniqueParticipantCode(id, String(b.code || name));
         const participants = await getParticipants(id);
-        participants.push({name,code,active:true,createdAt:new Date().toISOString()});
+        const participant = {name,code,active:true,createdAt:new Date().toISOString()};
+        participants.push(participant);
         await saveParticipants(id, participants);
+        await shadowUpsertParticipant(comp, participant);
         return redirect(res, "/c/" + encodeURIComponent(id) + "/links?new=" + encodeURIComponent(code), 303);
       }
 
@@ -650,13 +657,17 @@ export default async function handler(req, res) {
         const b = parseBody(req);
         const names = String(b.names || "").split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,200);
         const participants = await getParticipants(id);
+        const added = [];
         for (const name of names) {
           let base = slugify(name).slice(0,28) || "participant";
           let code = base, n = 2;
           while (participants.some(p=>p.code===code)) code = base + "-" + n++;
-          participants.push({name,code,active:true,createdAt:new Date().toISOString()});
+          const participant = {name,code,active:true,createdAt:new Date().toISOString()};
+          participants.push(participant);
+          added.push(participant);
         }
         await saveParticipants(id, participants);
+        await shadowUpsertParticipants(comp, added);
         return redirect(res, "/c/" + encodeURIComponent(id) + "/links", 303);
       }
 
@@ -666,6 +677,7 @@ export default async function handler(req, res) {
         const participants = (await getParticipants(id)).filter(p=>p.code!==code);
         await saveParticipants(id, participants);
         await redis(["DEL", statsKey(id, code)]);
+        await shadowWithdrawParticipant(id, code);
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
@@ -682,8 +694,16 @@ export default async function handler(req, res) {
           return send(res, 404, "Participant introuvable", "text/plain; charset=utf-8");
         }
         const newTotal = Number(await redis(["HINCRBY", statsKey(id, code), "points", amount]));
+        const effectiveTotal = Math.max(0, newTotal);
         if (newTotal < 0) await redis(["HSET", statsKey(id, code), "points", "0"]);
         await redis(["HSET", statsKey(id, code), "lastReason", reason || "Ajustement manuel", "updatedAt", new Date().toISOString()]);
+        await shadowRecordAdminAdjustment({
+          competitionId: id,
+          referralCode: code,
+          amount,
+          reason: reason || "Ajustement manuel",
+          totalAfter: effectiveTotal
+        });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
@@ -699,6 +719,7 @@ export default async function handler(req, res) {
         comps[i].status = status;
         comps[i].theme = themes.includes(theme) ? theme : "blue";
         await saveCompetitions(comps);
+        await shadowSyncCompetitionSettings(comps[i]);
         return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
       }
 
