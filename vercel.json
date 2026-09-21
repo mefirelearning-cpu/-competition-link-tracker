@@ -131,6 +131,10 @@
     {
       "source": "/api/me/:competition/campaign/:campaign/share",
       "destination": "/api/index?path=api/me/:competition/campaign/:campaign/share"
+    },
+    {
+      "source": "/api/me/:competition/mission-submit",
+      "destination": "/api/index?path=api/me/:competition/mission-submit"
     }
   ]
 }
