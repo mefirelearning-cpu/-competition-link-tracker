@@ -2178,11 +2178,37 @@ export default async function handler(req, res) {
           rewardType:b.rewardType,
           rewardValue:b.rewardValue,
           validityDays:b.validityDays,
+          eligibleServices:String(b.eligibleServices||"").split(",").map(x=>x.trim()).filter(Boolean),
           conditions:b.conditions,
           sortOrder:b.sortOrder,
           adminId:"admin"
         });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
+      }
+
+      if (action === "admin-prize-select" && req.method === "POST") {
+        const b=parseBody(req);
+        const result=await selectPrize({
+          competitionId:id,
+          participantId:String(b.participantId||""),
+          prizeId:String(b.prizeId||""),
+          selectedBy:"admin"
+        });
+        if(!result.ok){
+          return send(res,409,"Attribution du lot impossible : "+String(result.reason||"indisponible"),"text/plain; charset=utf-8");
+        }
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
+      }
+
+      if (action === "coupon-use" && req.method === "POST") {
+        const b=parseBody(req);
+        const result=await markCouponUsed({
+          competitionId:id,
+          couponId:String(b.couponId||""),
+          adminId:"admin"
+        });
+        if(!result.ok) return send(res,409,"Coupon indisponible ou déjà utilisé.","text/plain; charset=utf-8");
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
       }
 
       if (action === "finalize" && req.method === "POST") {
