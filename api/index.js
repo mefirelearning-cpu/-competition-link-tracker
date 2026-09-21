@@ -1155,6 +1155,220 @@ export default async function handler(req, res) {
         return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
       }
 
+      if (action === "campaign-create" && req.method === "POST") {
+        const b = parseBody(req);
+        await createCampaign({
+          competitionId: id,
+          name: b.name,
+          product: b.product,
+          description: b.description,
+          commercialText: b.commercialText,
+          imageData: b.imageData,
+          destinationUrl: b.destinationUrl,
+          whatsappUrl: b.whatsappUrl,
+          status: b.status,
+          pointsShare: b.pointsShare,
+          pointsInterest: b.pointsInterest,
+          pointsLead: b.pointsLead,
+          pointsSale: b.pointsSale,
+          multiplier: b.multiplier,
+          conversionMultiplier: b.conversionMultiplier,
+          dailyShareLimit: b.dailyShareLimit,
+          featured: String(b.featured || "") === "1",
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/campaigns", 303);
+      }
+
+      if (action === "campaign-status" && req.method === "POST") {
+        const b = parseBody(req);
+        await updateCampaignStatus({
+          competitionId: id,
+          campaignId: String(b.campaignId || ""),
+          status: String(b.status || "draft"),
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/campaigns", 303);
+      }
+
+      if (action === "campaign-delete" && req.method === "POST") {
+        const b = parseBody(req);
+        await deleteCampaign({
+          competitionId: id,
+          campaignId: String(b.campaignId || ""),
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/campaigns", 303);
+      }
+
+      if (action === "day-save" && req.method === "POST") {
+        const b = parseBody(req);
+        await createCompetitionDay({
+          competitionId: id,
+          dayNumber: b.dayNumber,
+          title: b.title,
+          description: b.description,
+          status: b.status,
+          startsAt: b.startsAt || null,
+          endsAt: b.endsAt || null,
+          rewardDailyPoints: b.rewardDailyPoints,
+          featuredCampaignId: b.featuredCampaignId || null,
+          marketingMessage: b.marketingMessage,
+          notificationText: b.notificationText,
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "days-resize" && req.method === "POST") {
+        const b = parseBody(req);
+        const result = await resizeCompetitionDays({
+          competitionId: id,
+          dayCount: b.dayCount,
+          force: String(b.force || "") === "1",
+          adminId: "admin"
+        });
+        if (!result.ok && result.reason === "shrink_requires_confirmation") {
+          const risky = (result.riskyDays || []).map(x => "Jour " + x.day_number + " — " + x.title + " (" + x.mission_count + " mission(s))").join("<br>");
+          return send(res, 409,
+            pageShell("Confirmation requise",
+              topNav() + "<div class=\"card\" style=\"max-width:760px;margin:auto\"><h2>Des journées configurées seraient supprimées</h2><p class=\"muted\">" + risky + "</p><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(id) + "/days-resize\"><input type=\"hidden\" name=\"dayCount\" value=\"" + esc(b.dayCount) + "\"><input type=\"hidden\" name=\"force\" value=\"1\"><div class=\"actions\"><a class=\"btn2\" href=\"/c/" + encodeURIComponent(id) + "/days\">Annuler</a><button class=\"danger\" type=\"submit\">Confirmer la réduction</button></div></form></div>"
+            )
+          );
+        }
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "mission-create" && req.method === "POST") {
+        const b = parseBody(req);
+        await createMission({
+          competitionId: id,
+          dayId: String(b.dayId || ""),
+          campaignId: b.campaignId || null,
+          title: b.title,
+          description: b.description,
+          pointsFixed: b.pointsFixed,
+          multiplier: b.multiplier || 1,
+          validationMode: b.validationMode,
+          status: "active",
+          adminId: "admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "lead-confirm" && req.method === "POST") {
+        const b = parseBody(req);
+        const result = await confirmLead({
+          interestId: String(b.interestId || ""),
+          adminId: "admin"
+        });
+        if (result.ok && result.participantId) {
+          await syncRedisPointCacheByParticipantId(result.competitionId || id, result.participantId, result.totalPoints);
+        }
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/prospects", 303);
+      }
+
+      if (action === "sale-confirm" && req.method === "POST") {
+        const b = parseBody(req);
+        const result = await confirmSale({
+          interestId: String(b.interestId || ""),
+          amount: b.amount,
+          currency: b.currency || "XAF",
+          adminId: "admin"
+        });
+        if (!result.ok && result.reason === "lead_required") {
+          return send(res, 409, "Confirme d’abord le prospect avant la vente.", "text/plain; charset=utf-8");
+        }
+        if (result.ok && result.participantId) {
+          await syncRedisPointCacheByParticipantId(result.competitionId || id, result.participantId, result.totalPoints);
+        }
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/prospects", 303);
+      }
+
+      if (action === "interest-reject" && req.method === "POST") {
+        const b = parseBody(req);
+        await rejectInterest({interestId:String(b.interestId || ""),adminId:"admin"});
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/prospects", 303);
+      }
+
+      if (action === "prize-add" && req.method === "POST") {
+        const b = parseBody(req);
+        await addPrize({
+          competitionId:id,
+          name:b.name,
+          description:b.description,
+          durationText:b.durationText,
+          sortOrder:b.sortOrder,
+          adminId:"admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
+      }
+
+      if (action === "tier-add" && req.method === "POST") {
+        const b = parseBody(req);
+        await addRewardTier({
+          competitionId:id,
+          minPoints:b.minPoints,
+          maxPoints:b.maxPoints,
+          rewardType:b.rewardType,
+          rewardValue:b.rewardValue,
+          validityDays:b.validityDays,
+          conditions:b.conditions,
+          sortOrder:b.sortOrder,
+          adminId:"admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
+      }
+
+      if (action === "finalize" && req.method === "POST") {
+        await freezeFinalRanking(id, "admin");
+        await generateRewardCoupons(id, "admin");
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
+      }
+
+      if (action === "generate-coupons" && req.method === "POST") {
+        await generateRewardCoupons(id, "admin");
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
+      }
+
+      if (action === "fraud-settings" && req.method === "POST") {
+        const b = parseBody(req);
+        await updateFraudSettings({
+          competitionId:id,
+          uniqueClickWindowHours:b.uniqueClickWindowHours,
+          dailyClickCap:b.dailyClickCap,
+          burstDetectionWindowMinutes:b.burstDetectionWindowMinutes,
+          maxClicksPerVisitor:b.maxClicksPerVisitor,
+          suspiciousThreshold:b.suspiciousThreshold,
+          blockObviousBots:String(b.blockObviousBots||"")==="1",
+          adminId:"admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/fraud", 303);
+      }
+
+      if (action === "fraud-resolve" && req.method === "POST") {
+        const b = parseBody(req);
+        await resolveFraudFlag({
+          competitionId:id,
+          flagId:String(b.flagId||""),
+          action:String(b.action||"ignored"),
+          adminId:"admin"
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/fraud", 303);
+      }
+
+      if (action === "announcement" && req.method === "POST") {
+        const b = parseBody(req);
+        await createAnnouncement({
+          competitionId:id,
+          title:b.title,
+          body:b.body,
+          kind:b.kind,
+          actionUrl:b.actionUrl||null
+        });
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/notifications", 303);
+      }
+
       if (action === "add" && req.method === "POST") {
         const b = parseBody(req);
         const name = String(b.name || "").trim();
