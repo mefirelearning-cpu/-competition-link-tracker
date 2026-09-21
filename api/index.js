@@ -2373,6 +2373,11 @@ export default async function handler(req, res) {
         comps[i].theme = themes.includes(theme) ? theme : "blue";
         await saveCompetitions(comps);
         await shadowSyncCompetitionSettings(comps[i]);
+        if (status === "ended") {
+          await freezeFinalRanking(id,"admin");
+          await generateRewardCoupons(id,"admin");
+          await syncAllRedisPointCaches(id);
+        }
         return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
       }
 
