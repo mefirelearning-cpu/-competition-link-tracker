@@ -744,6 +744,18 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
     content = pageTitleHtml("Graphique live","Visualise la position actuelle de tous les participants.") +
       statsHtml +
       "<div class=\"card\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>";
+  } else if (view === "campaigns") {
+    content = await adminCampaignsContent(comp);
+  } else if (view === "days") {
+    content = await adminDaysContent(comp);
+  } else if (view === "prospects") {
+    content = await adminProspectsContent(comp);
+  } else if (view === "rewards") {
+    content = await adminRewardsContent(comp);
+  } else if (view === "fraud") {
+    content = await adminFraudContent(comp);
+  } else if (view === "notifications") {
+    content = await adminNotificationsContent(comp);
   } else if (view === "scoring") {
     const scoring = await getScoringConfig(comp.id);
     const clickRule = scoring.rules.find(r => r.action_type === "valid_click") || {
