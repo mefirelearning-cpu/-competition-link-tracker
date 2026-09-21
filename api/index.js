@@ -700,14 +700,15 @@ function whatsappInterestUrl(campaign, referenceCode) {
 
 async function publicLandingPage() {
   const legacyComps = await getCompetitions();
-  const rows = (await Promise.all(legacyComps.map(async (comp) => {
+  const rows = (await Promise.all(legacyComps.map(async (legacy) => {
     try {
+      const comp = await findCompetition(legacy.id) || legacy;
       const db = await getJoinableCompetition(comp.id);
-      return db ? {...comp, db} : null;
+      return db ? {...legacy,...comp,db} : null;
     } catch {
-      return {...comp, db:null};
+      return {...legacy,db:null};
     }
-  }))).filter(Boolean).filter(x => ["active","scheduled"].includes(String(x.status || x.db?.status || "")));
+  }))).filter(Boolean).filter(x => ["active","scheduled"].includes(String(x.db?.status || x.status || "")));
 
   const cards = rows.length ? rows.map(({db, ...comp}) => {
     const open = db ? (db.status === "active" && db.registrations_open) : comp.status === "active";
@@ -757,9 +758,11 @@ function participantLinksHtml(rows, origin) {
 async function dashboardPage(origin) {
   await ensureLegacyMigration();
   const comps = await getCompetitions();
-  const summaries = await Promise.all(comps.map(async (c) => {
+  const summaries = await Promise.all(comps.map(async (legacy) => {
+    const c = await findCompetition(legacy.id) || legacy;
     const rows = await getRankedParticipants(c);
     return {
+      ...legacy,
       ...c,
       participants: rows.length,
       clicks: rows.reduce((s,r) => s + r.clicks, 0),
@@ -1450,6 +1453,7 @@ export default async function handler(req, res) {
 
     if (path.startsWith("join/")) {
       const competitionId = decodeURIComponent(path.slice("join/".length));
+      await ensureCompetitionLifecycle(competitionId).catch(()=>null);
       const dbComp = await getJoinableCompetition(competitionId);
       if (!dbComp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
 
