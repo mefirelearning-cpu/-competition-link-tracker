@@ -14,20 +14,11 @@ CREATE TABLE IF NOT EXISTS admin_accounts (
 ALTER TABLE admin_sessions
   ADD COLUMN IF NOT EXISTS admin_id TEXT;
 
-DO $$
-BEGIN
-  IF NOT EXISTS (
-    SELECT 1
-    FROM pg_constraint
-    WHERE conname = 'admin_sessions_admin_id_fkey'
-  ) THEN
-    ALTER TABLE admin_sessions
-      ADD CONSTRAINT admin_sessions_admin_id_fkey
-      FOREIGN KEY (admin_id)
-      REFERENCES admin_accounts(id)
-      ON DELETE CASCADE;
-  END IF;
-END $$;
+ALTER TABLE admin_sessions
+  ADD CONSTRAINT admin_sessions_admin_id_fkey
+  FOREIGN KEY (admin_id)
+  REFERENCES admin_accounts(id)
+  ON DELETE CASCADE;
 
 CREATE INDEX IF NOT EXISTS admin_sessions_admin_idx
   ON admin_sessions (admin_id, expires_at);
