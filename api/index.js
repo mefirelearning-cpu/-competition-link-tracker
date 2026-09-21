@@ -3,6 +3,7 @@ import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipa
 import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdminSession, destroyAdminSession, sameOriginRequest, loginNextPath } from "../lib/admin-auth.js";
 import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
 import { trackReferralVisit } from "../lib/referral-tracking.js";
+import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule } from "../lib/scoring.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
 const PREFIX = "ctl:v2";
@@ -494,6 +495,7 @@ function competitionSidebar(comp, view, profile) {
     ["ranking","Classement","/c/" + id + "/ranking"],
     ["live","Graphique live","/c/" + id + "/live"],
     ["participants","Participants","/c/" + id + "/participants"],
+    ["scoring","Points & bonus","/c/" + id + "/scoring"],
     ["settings","Paramètres","/c/" + id + "/settings"]
   ];
   return "<aside class=\"side\">" +
@@ -877,7 +879,7 @@ export default async function handler(req, res) {
       const parts = path.split("/").map(decodeURIComponent);
       const id = parts[1] || "";
       const view = parts[2] || "overview";
-      const allowedViews = ["overview","links","ranking","live","participants","settings"];
+      const allowedViews = ["overview","links","ranking","live","participants","scoring","settings"];
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
       if (!allowedViews.includes(view)) return send(res, 404, "Rubrique introuvable", "text/plain; charset=utf-8");
