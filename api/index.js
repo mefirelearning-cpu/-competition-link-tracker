@@ -359,6 +359,8 @@ async function participantDashboardPage(origin, session) {
   const comp = await findCompetition(session.competition_id);
   if (!comp) return participantShell("Compétition introuvable", participantTop(session) + "<div class=\"p-card\">Compétition introuvable.</div>");
 
+  await ensureCompetitionLifecycle(comp.id).catch(()=>null);
+
   const rows = await getRankedParticipants(comp);
   const row = rows.find(r => r.code === session.referral_code);
   const rank = row?.rank || "—";
@@ -368,16 +370,152 @@ async function participantDashboardPage(origin, session) {
   const valid = row?.valid || 0;
   const link = origin + "/r/" + comp.id + "/" + session.referral_code;
 
+  const [day, conversions, rewards, notifications, config] = await Promise.all([
+    getActiveDay(comp.id).catch(()=>null),
+    participantConversionStats(comp.id, session.participant_id).catch(()=>({interests:0,leads:0,sales:0})),
+    participantRewards(comp.id, session.participant_id).catch(()=>null),
+    listParticipantNotifications(comp.id, session.participant_id, 8).catch(()=>[]),
+    getCompetitionConfig(comp.id).catch(()=>null)
+  ]);
+
+  const missions = day ? await listDayMissions(comp.id, day.id).catch(()=>[]) : [];
+  const claimed = day ? await query(
+    "SELECT 1 FROM daily_claims WHERE day_id = $1 AND participant_id = $2 LIMIT 1",
+    [day.id, session.participant_id]
+  ).then(r=>r.rowCount>0).catch(()=>false) : false;
+
+  const ahead = typeof rank === "number" && rank > 1 ? rows[rank - 2] : null;
+  const gapAhead = ahead ? Math.max(0, Number(ahead.points||0) - Number(points||0) + 1) : 0;
+  const winnerCount = Number(config?.winner_count || 1);
+  const topTarget = rows[winnerCount - 1];
+  const gapTop = typeof rank === "number" && rank > winnerCount && topTarget
+    ? Math.max(0, Number(topTarget.points||0) - Number(points||0) + 1)
+    : 0;
+
+  const endsAt = config?.ends_at ? new Date(config.ends_at).getTime() : null;
+  const remainingMs = endsAt ? Math.max(0, endsAt - Date.now()) : null;
+  const remainingText = remainingMs === null
+    ? "Non défini"
+    : Math.floor(remainingMs/86400000) + "j " + Math.floor((remainingMs%86400000)/3600000) + "h";
+
+  const missionHtml = day
+    ? "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Événement du jour</div><h2 style=\"font-size:25px;margin:7px 0 8px\">" + esc(day.title) + "</h2><p class=\"p-muted\" style=\"margin:0 0 12px\">" + esc(day.description||day.marketing_message||"Consulte la mission et partage la campagne vedette.") + "</p>" +
+      (missions.length ? missions.map(m=>"<div class=\"p-notice\" style=\"margin-top:8px\"><b>" + esc(m.title) + "</b><br>" + esc(m.description||"") + (Number(m.points_fixed||0) ? "<br><span class=\"p-small\">+" + Number(m.points_fixed) + " pts</span>" : "") + "</div>").join("") : "") +
+      (day.featured_campaign_slug ? "<div class=\"p-actions\"><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(comp.id) + "/campaigns\">Voir l’affiche vedette</a></div>" : "") +
+      "</div>"
+    : "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Événement du jour</div><h2 style=\"margin:7px 0\">Aucune journée active</h2><p class=\"p-muted\">L’administrateur n’a pas encore publié l’événement du jour.</p></div>";
+
+  const claimHtml = day
+    ? "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Récompense quotidienne</div><div style=\"font-size:42px;font-weight:950;letter-spacing:-.06em;margin:7px 0\">+" + Number(day.reward_daily_points||0) + " pts</div>" +
+      (claimed
+        ? "<div class=\"p-notice p-success\">Récompense déjà récupérée aujourd’hui.</div>"
+        : "<form method=\"post\" action=\"/api/me/" + encodeURIComponent(comp.id) + "/daily-claim\"><input type=\"hidden\" name=\"dayId\" value=\"" + esc(day.id) + "\"><button class=\"p-btn\" type=\"submit\">Récupérer</button></form>") +
+      "</div>"
+    : "<div class=\"p-card p-span6\"><div class=\"p-kicker\" style=\"color:#666\">Récompense quotidienne</div><h2 style=\"margin:7px 0\">Indisponible</h2><p class=\"p-muted\">Reviens lorsqu’une journée sera active.</p></div>";
+
+  const motivation = [
+    ahead ? "Encore " + gapAhead + " point(s) pour dépasser #" + (Number(rank)-1) + "." : "Tu occupes actuellement la première position.",
+    gapTop > 0 ? "Encore " + gapTop + " point(s) pour entrer dans le Top " + winnerCount + "." : "Tu es actuellement dans la zone Top " + winnerCount + ".",
+    rewards?.nextTier ? "Encore " + Math.max(0,Number(rewards.nextTier.min_points)-Number(points)) + " point(s) avant ton prochain palier." : ""
+  ].filter(Boolean);
+
+  const notifHtml = notifications.length
+    ? notifications.map(n=>"<div class=\"p-notice\" style=\"margin-top:8px\"><b>" + esc(n.title) + "</b><br>" + esc(n.body) + (n.action_url ? "<br><a href=\"" + esc(n.action_url) + "\" style=\"font-weight:800\">Ouvrir</a>" : "") + "</div>").join("")
+    : "<div class=\"p-muted p-small\">Aucune notification récente.</div>";
+
   const body = participantTop(session) +
-    "<section class=\"p-hero\"><div class=\"p-kicker\">Mon espace · " + esc(comp.name) + "</div><h1>" + esc(session.pseudonym) + "</h1><p>Retrouve ici ton rang, tes points et ton lien personnel.</p></section>" +
-    "<div class=\"p-grid\"><div class=\"p-card p-span4\"><div class=\"p-stat\"><span>Position</span><div class=\"p-rank\">#" + esc(rank) + "</div></div></div>" +
-      "<div class=\"p-card p-span4 p-stat\"><span>Points</span><b>" + points + "</b></div><div class=\"p-card p-span4 p-stat\"><span>Visiteurs uniques</span><b>" + unique + "</b></div>" +
-      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Ton lien personnel</h2><span class=\"p-small p-muted\">" + valid + " clic(s) valide(s) · " + clicks + " ouverture(s)</span></div><div class=\"p-link\">" + esc(link) + "</div><div class=\"p-actions\"><button class=\"p-btn copy-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Copier</button><button class=\"p-btn2 share-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Partager</button></div></div>" +
-      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Classement</h2></div><p class=\"p-muted\" style=\"margin:0\">Consulte le classement public pour voir ta position par rapport aux autres participants.</p><div class=\"p-actions\"><a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(comp.id) + "\">Voir le classement</a></div></div>" +
-      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Prochaine étape</h2></div><div class=\"p-notice\">Les affiches, campagnes, récompenses quotidiennes et missions seront ajoutées ici progressivement, sans changer ton lien actuel.</div></div></div>" +
-      participantBottom(session);
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Mon espace · " + esc(comp.name) + "</div><h1>" + esc(session.pseudonym) + "</h1><p>Ta compétition en un coup d’œil. Temps restant : " + esc(remainingText) + ".</p></section>" +
+    "<div class=\"p-grid\">" +
+      "<div class=\"p-card p-span4\"><div class=\"p-stat\"><span>Position</span><div class=\"p-rank\">#" + esc(rank) + "</div></div></div>" +
+      "<div class=\"p-card p-span4 p-stat\"><span>Points</span><b>" + points + "</b></div>" +
+      "<div class=\"p-card p-span4 p-stat\"><span>Clics valides</span><b>" + valid + "</b></div>" +
+      claimHtml + missionHtml +
+      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Ton lien personnel</h2><span class=\"p-small p-muted\">" + unique + " personne(s) distincte(s) · " + clicks + " ouverture(s)</span></div><div class=\"p-link\">" + esc(link) + "</div><div class=\"p-actions\"><button class=\"p-btn copy-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Copier</button><button class=\"p-btn2 share-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Partager</button><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(comp.id) + "/campaigns\">Voir les affiches</a></div></div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Progression</h2></div>" + motivation.map(x=>"<div class=\"p-notice\" style=\"margin-top:8px\">" + esc(x) + "</div>").join("") + "</div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Conversions</h2></div><div class=\"p-grid\"><div class=\"p-stat p-span4\"><span>Intérêts</span><b>" + Number(conversions.interests||0) + "</b></div><div class=\"p-stat p-span4\"><span>Prospects</span><b>" + Number(conversions.leads||0) + "</b></div><div class=\"p-stat p-span4\"><span>Ventes</span><b>" + Number(conversions.sales||0) + "</b></div></div></div>" +
+      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Notifications</h2></div>" + notifHtml + "</div>" +
+    "</div>" + participantBottom(session,"home");
+
   const script = "document.addEventListener('click',async e=>{const c=e.target.closest('.copy-participant-link');if(c){try{await navigator.clipboard.writeText(c.dataset.link);c.textContent='Copié ✓'}catch{prompt('Copie ce lien :',c.dataset.link)}return}const s=e.target.closest('.share-participant-link');if(s){if(navigator.share){try{await navigator.share({title:'Mon lien de compétition',url:s.dataset.link})}catch{}}else{try{await navigator.clipboard.writeText(s.dataset.link);alert('Lien copié')}catch{prompt('Copie ce lien :',s.dataset.link)}}}});";
   return participantShell("Mon espace — " + comp.name, body, script);
+}
+
+async function participantCampaignsPage(origin, session) {
+  const comp = await findCompetition(session.competition_id);
+  if (!comp) return participantShell("Compétition introuvable", participantTop(session));
+  const campaigns = await listCampaigns(comp.id);
+  const cards = campaigns.length ? campaigns.map(camp => {
+    const offer = origin + "/offer/" + comp.id + "/" + camp.slug + "/" + session.referral_code;
+    const text = (camp.commercial_text || camp.short_text || camp.description || camp.name) + "\\n" + offer;
+    return "<article class=\"p-card p-span6 campaign-card\" data-campaign=\"" + esc(camp.id) + "\">" +
+      (camp.image_data ? "<img class=\"campaign-image\" src=\"" + esc(camp.image_data) + "\" alt=\"" + esc(camp.name) + "\" style=\"width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:13px;border:1px solid var(--p-line);margin-bottom:12px\">" : "") +
+      "<div class=\"p-title\"><div><div class=\"p-kicker\" style=\"color:#666\">" + esc(camp.product||"Campagne") + "</div><h2 style=\"font-size:23px;margin:5px 0 0\">" + esc(camp.name) + "</h2></div>" + (camp.featured ? "<span class=\"p-notice\" style=\"padding:6px 9px\">Vedette</span>" : "") + "</div>" +
+      "<p class=\"p-muted\">" + esc(camp.description||"") + "</p>" +
+      "<div class=\"p-notice\">Partage +" + Number(camp.points_share||0) + " · Intérêt +" + Number(camp.points_interest||0) + " · Lead +" + Number(camp.points_lead||0) + " · Vente +" + Number(camp.points_sale||0) + "</div>" +
+      "<div class=\"p-link\" style=\"margin-top:10px\">" + esc(offer) + "</div>" +
+      "<div class=\"p-actions\">" +
+        "<button class=\"p-btn campaign-share\" type=\"button\" data-campaign=\"" + esc(camp.id) + "\" data-link=\"" + esc(offer) + "\" data-text=\"" + esc(text) + "\">Partager</button>" +
+        "<button class=\"p-btn2 campaign-copy\" type=\"button\" data-campaign=\"" + esc(camp.id) + "\" data-value=\"" + esc(offer) + "\">Copier le lien</button>" +
+        "<button class=\"p-btn2 campaign-copy\" type=\"button\" data-campaign=\"" + esc(camp.id) + "\" data-value=\"" + esc(text) + "\">Copier le texte</button>" +
+        (camp.image_data ? "<a class=\"p-btn2 campaign-download\" data-campaign=\"" + esc(camp.id) + "\" href=\"" + esc(camp.image_data) + "\" download=\"" + esc(camp.slug) + ".jpg\">Télécharger l’affiche</a>" : "") +
+        "<a class=\"p-btn2 campaign-social\" data-campaign=\"" + esc(camp.id) + "\" href=\"https://wa.me/?text=" + encodeURIComponent(text) + "\" target=\"_blank\">WhatsApp</a>" +
+        "<a class=\"p-btn2 campaign-social\" data-campaign=\"" + esc(camp.id) + "\" href=\"https://www.facebook.com/sharer/sharer.php?u=" + encodeURIComponent(offer) + "\" target=\"_blank\">Facebook</a>" +
+        "<button class=\"p-btn2 campaign-tiktok\" type=\"button\" data-campaign=\"" + esc(camp.id) + "\" data-text=\"" + esc(text) + "\">TikTok</button>" +
+      "</div></article>";
+  }).join("") : "<div class=\"p-card p-span12\"><h2 style=\"margin-top:0\">Aucune campagne active</h2><p class=\"p-muted\">Les prochaines affiches apparaîtront ici dès leur publication.</p></div>";
+
+  const body = participantTop(session) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Campagnes</div><h1>Choisis. Partage. Mesure.</h1><p>Chaque affiche utilise automatiquement ton lien personnel.</p></section>" +
+    "<div class=\"p-grid\">" + cards + "</div>" + participantBottom(session,"campaigns");
+
+  const compId = JSON.stringify(comp.id);
+  const script =
+    "async function markShare(campaign,channel){try{await fetch('/api/me/'+encodeURIComponent(" + compId + " )+'/campaign/'+encodeURIComponent(campaign)+'/share',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'channel='+encodeURIComponent(channel)})}catch{}}" +
+    "document.addEventListener('click',async e=>{const share=e.target.closest('.campaign-share');if(share){await markShare(share.dataset.campaign,'native');if(navigator.share){try{await navigator.share({title:'Offre',text:share.dataset.text,url:share.dataset.link})}catch{}}else{try{await navigator.clipboard.writeText(share.dataset.text);alert('Texte et lien copiés')}catch{}}return}const copy=e.target.closest('.campaign-copy');if(copy){await markShare(copy.dataset.campaign,'copy');try{await navigator.clipboard.writeText(copy.dataset.value);copy.textContent='Copié ✓'}catch{prompt('Copie :',copy.dataset.value)}return}const social=e.target.closest('.campaign-social');if(social){markShare(social.dataset.campaign,'social');return}const dl=e.target.closest('.campaign-download');if(dl){markShare(dl.dataset.campaign,'download');return}const tt=e.target.closest('.campaign-tiktok');if(tt){await markShare(tt.dataset.campaign,'tiktok');try{await navigator.clipboard.writeText(tt.dataset.text)}catch{}window.open('https://www.tiktok.com/','_blank')}});";
+
+  return participantShell("Campagnes — " + comp.name, body, script);
+}
+
+async function participantRewardsPage(origin, session) {
+  const comp = await findCompetition(session.competition_id);
+  if (!comp) return participantShell("Compétition introuvable", participantTop(session));
+  const data = await participantRewards(comp.id, session.participant_id);
+  const m = data.membership || {};
+  const points = Number(m.total_points_cache||0);
+  const rank = m.rank_cache || "—";
+  const current = data.currentTier;
+  const next = data.nextTier;
+
+  let winnerBlock = "";
+  if (m.status === "completed" && Number(rank) <= Number(m.winner_count||0)) {
+    if (data.selection) {
+      winnerBlock = "<div class=\"p-notice p-success\"><b>Lot choisi :</b> " + esc(data.selection.prize_name) + " " + esc(data.selection.duration_text||"") + "</div>";
+    } else {
+      const available = data.prizes.filter(p=>p.status==="available");
+      winnerBlock = "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Choisis ton lot</h2><span class=\"p-small p-muted\">Rang #" + esc(rank) + "</span></div><div class=\"p-grid\">" +
+        available.map(p=>"<form class=\"p-card p-span4\" method=\"post\" action=\"/api/me/" + encodeURIComponent(comp.id) + "/prize-select\"><input type=\"hidden\" name=\"prizeId\" value=\"" + esc(p.id) + "\"><b>" + esc(p.name) + "</b><div class=\"p-small p-muted\" style=\"margin:6px 0\">" + esc(p.duration_text||"") + "</div><button class=\"p-btn2\" type=\"submit\">Choisir</button></form>").join("") +
+      "</div></div>";
+    }
+  }
+
+  const body = participantTop(session) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Récompenses</div><h1>" + points + " points.</h1><p>Ton palier et tes éventuels lots apparaissent ici.</p></section>" +
+    "<div class=\"p-grid\">" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Palier actuel</h2></div>" + (current ? "<div style=\"font-size:38px;font-weight:950\">" + Number(current.reward_value) + (current.reward_type==="discount"?" %":"") + "</div><p class=\"p-muted\">" + esc(current.reward_type) + "</p>" : "<p class=\"p-muted\">Aucun palier débloqué.</p>") + "</div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Prochain palier</h2></div>" + (next ? "<div style=\"font-size:30px;font-weight:950\">" + Number(next.min_points) + " pts</div><p class=\"p-muted\">Encore " + Math.max(0,Number(next.min_points)-points) + " point(s).</p>" : "<p class=\"p-muted\">Tu as atteint le dernier palier configuré.</p>") + "</div>" +
+      (data.coupon ? "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Ton bon</h2><span class=\"p-small p-muted\">" + esc(data.coupon.status) + "</span></div><div class=\"p-code\">" + esc(data.coupon.code) + "</div></div>" : "") +
+      winnerBlock +
+    "</div>" + participantBottom(session,"rewards");
+  return participantShell("Récompenses — " + comp.name, body);
+}
+
+async function participantRulesPage(session) {
+  const comp = await getCompetitionConfig(session.competition_id);
+  const body = participantTop(session) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Règlement</div><h1>" + esc(comp?.name||"Compétition") + "</h1><p>Règles publiques de participation et d’attribution des points.</p></section>" +
+    "<div class=\"p-card\"><div style=\"white-space:pre-wrap;line-height:1.7\">" + esc(comp?.rules || "Le règlement détaillé sera publié par l’administrateur. Les activités réelles générées par les liens personnels contribuent au score. Les clics artificiels, répétitifs ou frauduleux peuvent être ignorés.") + "</div></div>" +
+    participantBottom(session,"rules");
+  return participantShell("Règlement", body);
 }
 
 
