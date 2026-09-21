@@ -1061,7 +1061,26 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
 }
 
 async function findCompetition(id) {
-  return (await getCompetitions()).find(c => c.id === id);
+  const legacy = (await getCompetitions()).find(c => c.id === id);
+  if (!legacy) return null;
+  try {
+    const db = await ensureCompetitionLifecycle(id);
+    if (!db) return legacy;
+    const mappedStatus = db.status === "completed" ? "ended" : db.status;
+    return {
+      ...legacy,
+      status: mappedStatus || legacy.status,
+      endsAt: db.ends_at || legacy.endsAt || "",
+      startsAt: db.starts_at || legacy.startsAt || "",
+      registrationsOpen: db.registrations_open,
+      leaderboardVisible: db.leaderboard_visible,
+      leaderboardFrozen: db.leaderboard_frozen,
+      winnerCount: db.winner_count,
+      maxParticipants: db.max_participants
+    };
+  } catch {
+    return legacy;
+  }
 }
 
 async function uniqueCompetitionId(name) {
