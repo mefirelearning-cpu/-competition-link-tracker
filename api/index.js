@@ -807,45 +807,82 @@ function pointsCardsHtml(rows, comp) {
 
 async function adminCampaignsContent(comp) {
   const id = encodeURIComponent(comp.id);
-  const campaigns = await listCampaigns(comp.id, {admin:true});
+  const campaigns = await listCampaigns(comp.id,{admin:true});
   const stats = await getCampaignStats(comp.id);
-  const statsById = new Map(stats.map(x => [x.id, x]));
-  const cards = campaigns.length ? campaigns.map(camp => {
-    const s = statsById.get(camp.id) || {};
+  const statsById = new Map(stats.map(x=>[x.id,x]));
+
+  const dateValue = value => value ? new Date(value).toISOString().slice(0,16) : "";
+
+  const cards = campaigns.length ? campaigns.map(camp=>{
+    const s=statsById.get(camp.id)||{};
+    const editTarget="campaignEditImageData-"+camp.id;
+    const fileId="campaignEditImageFile-"+camp.id;
     return "<article class=\"card span6\">" +
       (camp.image_data ? "<img src=\"" + esc(camp.image_data) + "\" alt=\"\" style=\"width:100%;aspect-ratio:16/8;object-fit:cover;border-radius:13px;border:1px solid var(--line);margin-bottom:12px\">" : "") +
-      "<div class=\"section-title\"><div><h2>" + esc(camp.name) + "</h2><div class=\"subnav-note\">" + esc(camp.product || camp.slug) + "</div></div><span class=\"status\">" + esc(camp.status) + "</span></div>" +
+      "<div class=\"section-title\"><div><h2>" + esc(camp.name) + "</h2><div class=\"subnav-note\">" + esc(camp.product||camp.slug) + "</div></div><span class=\"status\">" + esc(camp.status) + "</span></div>" +
       "<div class=\"metric-grid\" style=\"grid-template-columns:repeat(4,minmax(0,1fr));margin-bottom:12px\">" +
         "<div class=\"stat\"><div class=\"label\">Partages</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.shares||0) + "</div></div>" +
         "<div class=\"stat\"><div class=\"label\">Intérêts</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.interests||0) + "</div></div>" +
         "<div class=\"stat\"><div class=\"label\">Leads</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.leads||0) + "</div></div>" +
         "<div class=\"stat\"><div class=\"label\">Ventes</div><div class=\"num\" style=\"font-size:22px\">" + Number(s.sales||0) + "</div></div>" +
       "</div>" +
-      "<div class=\"small muted\">Partage +" + Number(camp.points_share||0) + " · Intérêt +" + Number(camp.points_interest||0) + " · Lead +" + Number(camp.points_lead||0) + " · Vente +" + Number(camp.points_sale||0) + "</div>" +
-      "<div class=\"actions\" style=\"margin-top:12px\">" +
-        "<form method=\"post\" action=\"/api/competition/" + id + "/campaign-status\" style=\"display:flex;gap:7px;flex-wrap:wrap\"><input type=\"hidden\" name=\"campaignId\" value=\"" + esc(camp.id) + "\"><select name=\"status\" style=\"width:auto\"><option value=\"draft\"" + (camp.status==="draft"?" selected":"") + ">Brouillon</option><option value=\"scheduled\"" + (camp.status==="scheduled"?" selected":"") + ">Programmé</option><option value=\"active\"" + (camp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (camp.status==="paused"?" selected":"") + ">Pause</option><option value=\"ended\"" + (camp.status==="ended"?" selected":"") + ">Terminée</option></select><button class=\"btn2\" type=\"submit\">Enregistrer</button></form>" +
-        "<form method=\"post\" action=\"/api/competition/" + id + "/campaign-delete\"><input type=\"hidden\" name=\"campaignId\" value=\"" + esc(camp.id) + "\"><button class=\"danger\" type=\"submit\">Retirer</button></form>" +
-      "</div></article>";
+      "<div class=\"small muted\">Clic +" + Number(camp.points_click||0) + " · Partage +" + Number(camp.points_share||0) + " · Intérêt +" + Number(camp.points_interest||0) + " · Lead +" + Number(camp.points_lead||0) + " · Vente +" + Number(camp.points_sale||0) + "</div>" +
+      "<details style=\"margin-top:14px\"><summary class=\"btn2\" style=\"cursor:pointer;display:inline-flex\">Modifier la campagne</summary>" +
+        "<form method=\"post\" action=\"/api/competition/" + id + "/campaign-update\" style=\"margin-top:12px\"><input type=\"hidden\" name=\"campaignId\" value=\"" + esc(camp.id) + "\"><div class=\"form-grid\">" +
+          "<div><label>Nom</label><input name=\"name\" value=\"" + esc(camp.name) + "\" required></div>" +
+          "<div><label>Produit</label><input name=\"product\" value=\"" + esc(camp.product||"") + "\"></div>" +
+          "<div class=\"full\"><label>Description</label><textarea name=\"description\">" + esc(camp.description||"") + "</textarea></div>" +
+          "<div class=\"full\"><label>Texte commercial</label><textarea name=\"commercialText\">" + esc(camp.commercial_text||"") + "</textarea></div>" +
+          "<div class=\"full\"><label>Remplacer l’affiche</label><input id=\"" + esc(fileId) + "\" class=\"campaign-image-file\" data-target=\"" + esc(editTarget) + "\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\"><input id=\"" + esc(editTarget) + "\" type=\"hidden\" name=\"imageData\"></div>" +
+          "<div><label>URL destination</label><input name=\"destinationUrl\" value=\"" + esc(camp.destination_url||"") + "\"></div>" +
+          "<div><label>URL WhatsApp</label><input name=\"whatsappUrl\" value=\"" + esc(camp.whatsapp_url||"") + "\"></div>" +
+          "<div><label>Points clic</label><input name=\"pointsClick\" type=\"number\" value=\"" + Number(camp.points_click||0) + "\"></div>" +
+          "<div><label>Cap clic/jour</label><input name=\"clickDailyCap\" type=\"number\" min=\"0\" value=\"" + (camp.click_daily_cap??"") + "\"></div>" +
+          "<div><label>Points partage</label><input name=\"pointsShare\" type=\"number\" value=\"" + Number(camp.points_share||0) + "\"></div>" +
+          "<div><label>Limite partage/jour</label><input name=\"dailyShareLimit\" type=\"number\" min=\"1\" value=\"" + Number(camp.daily_share_limit||1) + "\"></div>" +
+          "<div><label>Points intérêt</label><input name=\"pointsInterest\" type=\"number\" value=\"" + Number(camp.points_interest||0) + "\"></div>" +
+          "<div><label>Points lead</label><input name=\"pointsLead\" type=\"number\" value=\"" + Number(camp.points_lead||0) + "\"></div>" +
+          "<div><label>Points vente</label><input name=\"pointsSale\" type=\"number\" value=\"" + Number(camp.points_sale||0) + "\"></div>" +
+          "<div><label>Points referral</label><input name=\"pointsReferral\" type=\"number\" value=\"" + Number(camp.points_referral||0) + "\"></div>" +
+          "<div><label>Points retention</label><input name=\"pointsRetention\" type=\"number\" value=\"" + Number(camp.points_retention||0) + "\"></div>" +
+          "<div><label>Multiplicateur trafic</label><input name=\"multiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"" + Number(camp.multiplier||1) + "\"></div>" +
+          "<div><label>Multiplicateur conversion</label><input name=\"conversionMultiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"" + Number(camp.conversion_multiplier||1) + "\"></div>" +
+          "<div><label>Début</label><input name=\"startsAt\" class=\"config-datetime\" type=\"datetime-local\" value=\"" + esc(dateValue(camp.starts_at)) + "\"></div>" +
+          "<div><label>Fin</label><input name=\"endsAt\" class=\"config-datetime\" type=\"datetime-local\" value=\"" + esc(dateValue(camp.ends_at)) + "\"></div>" +
+          "<div><label>Statut</label><select name=\"status\"><option value=\"draft\"" + (camp.status==="draft"?" selected":"") + ">Brouillon</option><option value=\"scheduled\"" + (camp.status==="scheduled"?" selected":"") + ">Programmé</option><option value=\"active\"" + (camp.status==="active"?" selected":"") + ">Active</option><option value=\"paused\"" + (camp.status==="paused"?" selected":"") + ">Pause</option><option value=\"ended\"" + (camp.status==="ended"?" selected":"") + ">Terminée</option></select></div>" +
+          "<div><label>Historique des points</label><select name=\"applyMode\"><option value=\"future\">À partir de maintenant</option><option value=\"recalculate\">Recalculer les anciennes actions</option></select></div>" +
+          "<div class=\"full\"><label><input type=\"checkbox\" name=\"featured\" value=\"1\" style=\"width:auto;margin-right:7px\"" + (camp.featured?" checked":"") + "> Campagne vedette</label></div>" +
+          "<div class=\"full actions\"><button class=\"btn\" type=\"submit\">Enregistrer</button></div>" +
+        "</div></form>" +
+      "</details>" +
+      "<div class=\"actions\" style=\"margin-top:12px\"><form method=\"post\" action=\"/api/competition/" + id + "/campaign-delete\"><input type=\"hidden\" name=\"campaignId\" value=\"" + esc(camp.id) + "\"><button class=\"danger\" type=\"submit\">Retirer</button></form></div>" +
+    "</article>";
   }).join("") : "<div class=\"card span12 empty\">Aucune campagne. Crée la première ci-dessous.</div>";
 
-  return pageTitleHtml("Affiches & campagnes","Chaque affiche devient une campagne traçable avec son propre barème.") +
+  return pageTitleHtml("Affiches & campagnes","Crée et modifie les campagnes, leur calendrier, leurs points et leurs limites sans toucher au code.") +
     "<div class=\"grid\" style=\"margin-bottom:14px\">" + cards + "</div>" +
-    "<div class=\"card\"><div class=\"section-title\"><div><h2>Nouvelle campagne</h2><div class=\"subnav-note\">Tous les points et limites restent modifiables depuis l’administration.</div></div></div>" +
+    "<div class=\"card\"><div class=\"section-title\"><div><h2>Nouvelle campagne</h2><div class=\"subnav-note\">Une campagne peut rester en brouillon, être programmée ou publiée immédiatement.</div></div></div>" +
       "<form method=\"post\" action=\"/api/competition/" + id + "/campaign-create\" id=\"campaignCreateForm\"><div class=\"form-grid\">" +
         "<div><label>Nom</label><input name=\"name\" required placeholder=\"Gemini Pro Promo\"></div>" +
         "<div><label>Produit</label><input name=\"product\" placeholder=\"Gemini Pro\"></div>" +
-        "<div class=\"full\"><label>Description</label><textarea name=\"description\" placeholder=\"Description de l’offre\"></textarea></div>" +
-        "<div class=\"full\"><label>Texte commercial à copier</label><textarea name=\"commercialText\" placeholder=\"Texte que les participants partageront\"></textarea></div>" +
-        "<div class=\"full\"><label>Affiche</label><input id=\"campaignImageFile\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\"><input type=\"hidden\" id=\"campaignImageData\" name=\"imageData\"><div class=\"footer-note\">L’image est compressée dans le navigateur avant envoi.</div></div>" +
+        "<div class=\"full\"><label>Description</label><textarea name=\"description\"></textarea></div>" +
+        "<div class=\"full\"><label>Texte commercial à copier</label><textarea name=\"commercialText\"></textarea></div>" +
+        "<div class=\"full\"><label>Affiche</label><input id=\"campaignImageFile\" class=\"campaign-image-file\" data-target=\"campaignImageData\" type=\"file\" accept=\"image/png,image/jpeg,image/webp\"><input type=\"hidden\" id=\"campaignImageData\" name=\"imageData\"><div class=\"footer-note\">Compression automatique avant envoi.</div></div>" +
         "<div><label>URL destination</label><input name=\"destinationUrl\" placeholder=\"https://...\"></div>" +
-        "<div><label>URL WhatsApp éventuelle</label><input name=\"whatsappUrl\" placeholder=\"https://wa.me/...\"></div>" +
+        "<div><label>URL WhatsApp</label><input name=\"whatsappUrl\" placeholder=\"https://wa.me/...\"></div>" +
+        "<div><label>Points clic</label><input name=\"pointsClick\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Cap clic/jour</label><input name=\"clickDailyCap\" type=\"number\" min=\"0\"></div>" +
         "<div><label>Points partage</label><input name=\"pointsShare\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Limite partage/jour</label><input name=\"dailyShareLimit\" type=\"number\" min=\"1\" value=\"1\"></div>" +
         "<div><label>Points intérêt</label><input name=\"pointsInterest\" type=\"number\" value=\"0\"></div>" +
         "<div><label>Points lead</label><input name=\"pointsLead\" type=\"number\" value=\"0\"></div>" +
         "<div><label>Points vente</label><input name=\"pointsSale\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Points referral</label><input name=\"pointsReferral\" type=\"number\" value=\"0\"></div>" +
+        "<div><label>Points retention</label><input name=\"pointsRetention\" type=\"number\" value=\"0\"></div>" +
         "<div><label>Multiplicateur trafic</label><input name=\"multiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"1\"></div>" +
         "<div><label>Multiplicateur conversion</label><input name=\"conversionMultiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"1\"></div>" +
-        "<div><label>Bonus partage max/jour</label><input name=\"dailyShareLimit\" type=\"number\" min=\"1\" value=\"1\"></div>" +
+        "<div><label>Début</label><input name=\"startsAt\" class=\"config-datetime\" type=\"datetime-local\"></div>" +
+        "<div><label>Fin</label><input name=\"endsAt\" class=\"config-datetime\" type=\"datetime-local\"></div>" +
         "<div><label>Statut</label><select name=\"status\"><option value=\"draft\">Brouillon</option><option value=\"scheduled\">Programmé</option><option value=\"active\">Active</option></select></div>" +
         "<div class=\"full\"><label><input type=\"checkbox\" name=\"featured\" value=\"1\" style=\"width:auto;margin-right:7px\"> Campagne vedette</label></div>" +
         "<div class=\"full\"><button class=\"btn\" type=\"submit\">Créer la campagne</button></div>" +
