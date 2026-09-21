@@ -3,7 +3,7 @@ import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipa
 import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdminSession, destroyAdminSession, sameOriginRequest, loginNextPath } from "../lib/admin-auth.js";
 import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, joinExistingParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
 import { trackReferralVisit } from "../lib/referral-tracking.js";
-import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule, recalculatePointTransactions } from "../lib/scoring.js";
+import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule, recalculatePointTransactions, adminAdjustPoints } from "../lib/scoring.js";
 import { getVisitorIdentity } from "../lib/referral-tracking.js";
 import { query } from "../lib/db.js";
 import { getCompetitionConfig, updateCompetitionConfig, resizeCompetitionDays, ensureCompetitionLifecycle } from "../lib/competition-config.js";
@@ -2503,30 +2503,42 @@ export default async function handler(req, res) {
 
       if (action === "points" && req.method === "POST") {
         const b = parseBody(req);
-        if (!String(b.reason || "").trim()) {
+        const reason = String(b.reason || "").trim();
+        if (!reason) {
           return send(res, 400, "Le motif de l’ajustement est obligatoire.", "text/plain; charset=utf-8");
         }
         const code = String(b.code || "").trim();
         const amount = Number.parseInt(String(b.quickAmount || b.amount || ""), 10);
-        const reason = String(b.reason || "").trim().slice(0, 80);
         if (!code || !Number.isInteger(amount) || amount === 0 || amount < -10000 || amount > 10000) {
           return send(res, 400, "Valeur de points invalide", "text/plain; charset=utf-8");
         }
-        const participants = await getParticipants(id);
-        if (!participants.some(p => p.code === code)) {
+
+        const found = await query(
+          `SELECT participant_id
+           FROM competition_participants
+           WHERE competition_id=$1 AND referral_code=$2
+           LIMIT 1`,
+          [id,code]
+        );
+        const participantId=found.rows[0]?.participant_id;
+        if (!participantId) {
           return send(res, 404, "Participant introuvable", "text/plain; charset=utf-8");
         }
-        const newTotal = Number(await redis(["HINCRBY", statsKey(id, code), "points", amount]));
-        const effectiveTotal = Math.max(0, newTotal);
-        if (newTotal < 0) await redis(["HSET", statsKey(id, code), "points", "0"]);
-        await redis(["HSET", statsKey(id, code), "lastReason", reason || "Ajustement manuel", "updatedAt", new Date().toISOString()]);
-        await shadowRecordAdminAdjustment({
-          competitionId: id,
-          referralCode: code,
+
+        const result=await adminAdjustPoints({
+          competitionId:id,
+          participantId,
           amount,
-          reason: reason || "Ajustement manuel",
-          totalAfter: effectiveTotal
+          reason,
+          adminId:"admin"
         });
+        if(!result.ok){
+          const message=result.reason==="no_points_to_remove"
+            ? "Ce participant n’a aucun point à retirer."
+            : "Ajustement impossible.";
+          return send(res,400,message,"text/plain; charset=utf-8");
+        }
+        await redis(["HSET", statsKey(id, code), "points", String(result.totalPoints), "lastReason", reason.slice(0,120), "updatedAt", new Date().toISOString()]);
         return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
       }
 
