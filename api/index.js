@@ -366,9 +366,12 @@ function participantShell(title, body, extraScript = "") {
 }
 
 function participantTop(session = null) {
-  return "<div class=\"p-top\"><a class=\"p-brand\" href=\"" + (session ? "/me/" + encodeURIComponent(session.competition_id) : "/participant/login") + "\"><span class=\"p-mark\">CL</span><span>Competition Link Tracker</span></a>" +
+  const id=session?encodeURIComponent(session.competition_id):"";
+  return "<div class=\"p-top\"><a class=\"p-brand\" href=\"" + (session ? "/me/" + id : "/participant/login") + "\"><span class=\"p-mark\">CL</span><span>Competition Link Tracker</span></a>" +
     "<div class=\"p-nav\">" +
-      (session ? "<a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(session.competition_id) + "\">Classement</a><form method=\"post\" action=\"/participant/logout\" style=\"margin:0\"><button class=\"p-btn2\" type=\"submit\">Déconnexion</button></form>" : "<a class=\"p-btn2\" href=\"/participant/login\">Se connecter</a>") +
+      (session
+        ? "<a class=\"p-btn2\" href=\"/me/" + id + "/campaigns\">Campagnes</a><a class=\"p-btn2\" href=\"/leaderboard/" + id + "\">Classement</a><a class=\"p-btn2\" href=\"/me/" + id + "/rewards\">Récompenses</a><a class=\"p-btn2\" href=\"/me/" + id + "/rules\">Règlement</a><form method=\"post\" action=\"/participant/logout\" style=\"margin:0\"><button class=\"p-btn2\" type=\"submit\">Déconnexion</button></form>"
+        : "<a class=\"p-btn2\" href=\"/participant/login\">Se connecter</a>") +
     "</div></div>";
 }
 
