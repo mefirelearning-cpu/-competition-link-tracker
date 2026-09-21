@@ -125,6 +125,31 @@ async function syncAllRedisPointCaches(competitionId) {
   }
 }
 
+
+async function syncAllRedisTrackingCaches(competitionId) {
+  try {
+    const result=await query(
+      `SELECT referral_code,total_points_cache,raw_clicks_cache,
+              unique_clicks_cache,valid_clicks_cache
+       FROM competition_participants
+       WHERE competition_id=$1`,
+      [competitionId]
+    );
+    for(const row of result.rows){
+      await redis([
+        "HSET",
+        statsKey(competitionId,row.referral_code),
+        "points",String(Math.max(0,Number(row.total_points_cache)||0)),
+        "clicks",String(Math.max(0,Number(row.raw_clicks_cache)||0)),
+        "unique",String(Math.max(0,Number(row.unique_clicks_cache)||0)),
+        "valid",String(Math.max(0,Number(row.valid_clicks_cache)||0))
+      ]);
+    }
+  } catch(error) {
+    console.error("redis-all-tracking-cache-sync:",error);
+  }
+}
+
 function hiddenInputsFromBody(body, names) {
   return names.map(name =>
     "<input type=\"hidden\" name=\"" + esc(name) + "\" value=\"" + esc(body[name] ?? "") + "\">"
@@ -1166,7 +1191,7 @@ async function adminFraudContent(comp) {
   const [settings,flags] = await Promise.all([getFraudSettings(comp.id),listFraudFlags(comp.id)]);
   const f = settings || {};
   const rows = flags.length ? flags.map(flag =>
-    "<tr><td>" + esc(flag.pseudonym||"Visiteur") + "<div class=\"code\">" + esc(flag.referral_code||"") + "</div></td><td>" + Number(flag.risk_score||0).toFixed(2) + "</td><td>" + esc(flag.reason) + "</td><td>" + esc(flag.status) + "</td><td><form method=\"post\" action=\"/api/competition/" + id + "/fraud-resolve\" class=\"actions\"><input type=\"hidden\" name=\"flagId\" value=\"" + esc(flag.id) + "\"><button class=\"btn2\" name=\"action\" value=\"ignored\" type=\"submit\">Ignorer</button><button class=\"btn2\" name=\"action\" value=\"invalidated\" type=\"submit\">Invalider</button><button class=\"danger\" name=\"action\" value=\"suspended\" type=\"submit\">Suspendre</button></form></td></tr>"
+    "<tr><td>" + esc(flag.pseudonym||"Visiteur") + "<div class=\"code\">" + esc(flag.referral_code||flag?.metadata?.referralCode||"") + "</div></td><td>" + Number(flag.risk_score||0).toFixed(2) + "</td><td>" + esc(flag.reason) + "</td><td>" + esc(flag.status) + "</td><td><form method=\"post\" action=\"/api/competition/" + id + "/fraud-resolve\" class=\"actions\"><input type=\"hidden\" name=\"flagId\" value=\"" + esc(flag.id) + "\"><button class=\"btn2\" name=\"action\" value=\"ignored\" type=\"submit\">Ignorer</button><button class=\"btn2\" name=\"action\" value=\"invalidated\" type=\"submit\">Invalider</button><button class=\"danger\" name=\"action\" value=\"suspended\" type=\"submit\">Suspendre</button><button class=\"danger\" name=\"action\" value=\"blocked\" type=\"submit\">Bloquer</button></form></td></tr>"
   ).join("") : "<tr><td colspan=\"5\" class=\"empty\">Aucune activité suspecte ouverte.</td></tr>";
   return pageTitleHtml("Anti-fraude","Déduplication raisonnable, plafonds et revue manuelle des signaux suspects.") +
     "<div class=\"grid\"><div class=\"card span5\"><div class=\"section-title\"><h2>Réglages</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/fraud-settings\"><div class=\"form-grid\"><div><label>Fenêtre unique (heures)</label><input name=\"uniqueClickWindowHours\" type=\"number\" min=\"1\" value=\"" + Number(f.unique_click_window_hours||2160) + "\"></div><div><label>Cap clics valides/jour</label><input name=\"dailyClickCap\" type=\"number\" min=\"1\" value=\"" + (f.daily_click_cap??"") + "\"></div><div><label>Fenêtre burst (min)</label><input name=\"burstDetectionWindowMinutes\" type=\"number\" min=\"1\" value=\"" + Number(f.burst_detection_window_minutes||5) + "\"></div><div><label>Max clics/visiteur</label><input name=\"maxClicksPerVisitor\" type=\"number\" min=\"1\" value=\"" + Number(f.max_clicks_per_visitor||8) + "\"></div><div><label>Seuil suspect</label><input name=\"suspiciousThreshold\" type=\"number\" min=\"1\" value=\"" + Number(f.suspicious_threshold||20) + "\"></div><div><label>Bots évidents</label><select name=\"blockObviousBots\"><option value=\"1\"" + (f.block_obvious_bots!==false?" selected":"") + ">Ignorer</option><option value=\"0\"" + (f.block_obvious_bots===false?" selected":"") + ">Autoriser</option></select></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer</button></div></div></form></div>" +
@@ -2442,12 +2467,15 @@ export default async function handler(req, res) {
 
       if (action === "fraud-resolve" && req.method === "POST") {
         const b = parseBody(req);
-        await resolveFraudFlag({
+        const result=await resolveFraudFlag({
           competitionId:id,
           flagId:String(b.flagId||""),
           action:String(b.action||"ignored"),
           adminId:"admin"
         });
+        if(result?.ok && (result.action==="invalidated" || result.action==="suspended" || result.action==="blocked")){
+          await syncAllRedisTrackingCaches(id);
+        }
         return redirect(res, "/c/" + encodeURIComponent(id) + "/fraud", 303);
       }
 
