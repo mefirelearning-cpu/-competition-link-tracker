@@ -729,6 +729,108 @@ export default async function handler(req, res) {
       return redirect(res, "/admin/login", 303);
     }
 
+    if (path.startsWith("join/")) {
+      const competitionId = decodeURIComponent(path.slice("join/".length));
+      const dbComp = await getJoinableCompetition(competitionId);
+      if (!dbComp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
+
+      if (req.method === "GET") {
+        if (dbComp.status !== "active" || !dbComp.registrations_open) {
+          return send(res, 403, participantShell("Inscriptions fermées", participantTop(null) + "<div class=\"p-card\"><h2 style=\"margin-top:0\">Inscriptions fermées</h2><p class=\"p-muted\">Cette compétition n’accepte pas actuellement de nouvelles inscriptions.</p><a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(competitionId) + "\">Voir le classement</a></div>"));
+        }
+        if (dbComp.max_participants && Number(dbComp.participant_count) >= Number(dbComp.max_participants)) {
+          return send(res, 403, participantShell("Compétition complète", participantTop(null) + "<div class=\"p-card\"><h2 style=\"margin-top:0\">Compétition complète</h2><p class=\"p-muted\">Le nombre maximum de participants a été atteint.</p></div>"));
+        }
+        return send(res, 200, joinPage(dbComp));
+      }
+
+      if (req.method === "POST") {
+        if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+        const b = parseBody(req);
+        const pseudonym = String(b.pseudonym || "").trim();
+        const whatsapp = String(b.whatsapp || "").trim();
+        const referralCode = await uniqueParticipantCode(competitionId, "p-" + randomBytes(4).toString("hex"));
+
+        const result = await registerParticipantAccount({
+          competitionId,
+          pseudonym,
+          whatsapp,
+          referralCode
+        });
+
+        if (!result.ok) {
+          const messages = {
+            invalid_pseudonym: "Choisis un pseudo valide.",
+            invalid_whatsapp: "Entre un numéro WhatsApp valide avec l’indicatif pays.",
+            competition_not_found: "Compétition introuvable.",
+            registrations_closed: "Les inscriptions sont actuellement fermées.",
+            competition_full: "Le nombre maximum de participants a été atteint.",
+            account_exists: "Un compte existe déjà avec ce numéro WhatsApp. Utilise la page de connexion.",
+            duplicate: "Cette inscription existe déjà. Essaie de te connecter."
+          };
+          return send(res, 400, joinPage(dbComp, messages[result.reason] || "Impossible de créer le compte.", {pseudonym, whatsapp}));
+        }
+
+        const participants = await getParticipants(competitionId);
+        participants.push({
+          name: result.pseudonym,
+          code: result.referralCode,
+          active: true,
+          createdAt: new Date().toISOString(),
+          selfRegistered: true
+        });
+        await saveParticipants(competitionId, participants);
+        await createParticipantSession(req, res, result.participantId, competitionId);
+        return send(res, 201, joinSuccessPage(result, origin));
+      }
+
+      return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
+    }
+
+    if (path === "participant/login") {
+      if (req.method === "GET") {
+        const existing = await getParticipantSession(req);
+        if (existing?.competition_id) return redirect(res, "/me/" + encodeURIComponent(existing.competition_id), 302);
+        return send(res, 200, participantLoginPage());
+      }
+
+      if (req.method === "POST") {
+        if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+        const b = parseBody(req);
+        const checked = await authenticateParticipant(req, b.whatsapp, b.code);
+        if (!checked.ok) {
+          const msg = checked.reason === "rate_limited"
+            ? "Trop de tentatives. Réessaie dans quelques minutes."
+            : "Numéro WhatsApp ou code privé incorrect.";
+          return send(res, checked.reason === "rate_limited" ? 429 : 401, participantLoginPage(msg));
+        }
+        await createParticipantSession(req, res, checked.participantId, checked.competitionId);
+        return redirect(res, "/me/" + encodeURIComponent(checked.competitionId), 303);
+      }
+
+      return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
+    }
+
+    if (path === "participant/logout") {
+      if (req.method !== "POST") return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
+      if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+      await destroyParticipantSession(req, res);
+      return redirect(res, "/participant/login", 303);
+    }
+
+    if (path === "me") {
+      const session = await getParticipantSession(req);
+      if (!session) return redirect(res, "/participant/login", 303);
+      return redirect(res, "/me/" + encodeURIComponent(session.competition_id), 302);
+    }
+
+    if (path.startsWith("me/")) {
+      const competitionId = decodeURIComponent(path.slice("me/".length));
+      const session = await getParticipantSession(req, competitionId);
+      if (!session) return redirect(res, "/participant/login", 303);
+      return send(res, 200, await participantDashboardPage(origin, session));
+    }
+
     if (path === "admin") {
       if (!await ensureAdminAccess(req, res, "/admin")) return;
       return send(res, 200, await dashboardPage(origin));
