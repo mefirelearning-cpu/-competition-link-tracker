@@ -777,13 +777,18 @@ function pageTitleHtml(title, subtitle, actions = "") {
 }
 
 function participantAdminRows(rows, comp) {
-  if (!rows.length) return "<tr><td colspan=\"8\" class=\"empty\">Aucun participant.</td></tr>";
-  return rows.map(r =>
-    "<tr><td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
-    "<td>#" + r.rank + "</td><td class=\"points-col\">" + r.points + "</td><td>" + r.clicks + "</td><td>" + r.unique + "</td><td>" + r.valid + "</td>" +
-    "<td><button class=\"iconbtn copy\" type=\"button\" data-link=\"/r/" + esc(comp.id) + "/" + esc(r.code) + "\">Copier lien</button></td>" +
-    "<td><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(comp.id) + "/delete-participant\"><input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>"
-  ).join("");
+  if (!rows.length) return "<tr><td colspan=\"9\" class=\"empty\">Aucun participant.</td></tr>";
+  const id = encodeURIComponent(comp.id);
+  return rows.map(r => {
+    const status = r.membershipStatus || (r.active === false ? "suspended" : "active");
+    const action = status === "active" ? "suspended" : "active";
+    const actionLabel = status === "active" ? "Suspendre" : "Réactiver";
+    return "<tr><td><div class=\"person\">" + esc(r.name) + "</div><div class=\"code\">" + esc(r.code) + "</div></td>" +
+      "<td>" + (r.rank ? "#" + r.rank : "—") + "</td><td class=\"points-col\">" + Number(r.points||0) + "</td><td>" + Number(r.clicks||0) + "</td><td>" + Number(r.unique||0) + "</td><td>" + Number(r.valid||0) + "</td>" +
+      "<td><span class=\"status\">" + esc(status) + "</span></td>" +
+      "<td><button class=\"iconbtn copy\" type=\"button\" data-link=\"/r/" + esc(comp.id) + "/" + esc(r.code) + "\">Copier lien</button></td>" +
+      "<td><form method=\"post\" action=\"/api/competition/" + id + "/participant-status\" class=\"actions\"><input type=\"hidden\" name=\"participantId\" value=\"" + esc(r.participantId||"") + "\"><input type=\"hidden\" name=\"action\" value=\"" + action + "\"><input type=\"hidden\" name=\"reason\" value=\"Action administrateur\"><button class=\"" + (action==="suspended"?"danger":"btn2") + "\" type=\"submit\">" + actionLabel + "</button></form></td></tr>";
+  }).join("");
 }
 
 function pointsCardsHtml(rows, comp) {
@@ -1049,14 +1054,16 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
         "<div class=\"card span12\"><div class=\"section-title\"><h2>Bonus burst configurés</h2><span class=\"small muted\">" + scoring.bursts.length + " règle(s)</span></div><div class=\"table-wrap\"><table><thead><tr><th>Nom</th><th>Seuil</th><th>Fenêtre</th><th>Bonus</th><th>Limite</th><th>État</th><th>Action</th></tr></thead><tbody>" + burstRows + "</tbody></table></div></div>" +
       "</div>";
   } else if (view === "participants") {
-    content = pageTitleHtml("Participants","Ajoute les participants individuellement ou en masse.") +
+    const adminParticipants = await listAdminParticipants(comp.id);
+    const activeAdminParticipants = adminParticipants.filter(r=>r.membershipStatus==="active");
+    content = pageTitleHtml("Participants","Ajoute, suspends ou réactive les participants sans supprimer leur historique.") +
       success +
       "<div class=\"grid\" style=\"margin-bottom:14px\">" +
         "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajouter un participant</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/add\"><div class=\"form-grid\"><div><label>Nom</label><input name=\"name\" placeholder=\"Nom du participant\" required></div><div><label>Code (facultatif)</label><input name=\"code\" placeholder=\"Généré automatiquement\"></div><div class=\"full\"><button class=\"btn\" style=\"width:100%\" type=\"submit\">Ajouter le participant</button></div></div></form></div>" +
         "<div class=\"card span6\"><div class=\"section-title\"><h2>Ajout multiple</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/bulk\"><label>Un nom par ligne</label><textarea name=\"names\" placeholder=\"Aron&#10;Tony&#10;Marc&#10;Sarah\"></textarea><button class=\"btn2\" style=\"width:100%;margin-top:9px\" type=\"submit\">Ajouter toute la liste</button></form></div>" +
       "</div>" +
-      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Attribuer des points</h2><div class=\"subnav-note\">+5, +10, +20, +50 ou une valeur personnalisée. Une valeur négative permet de corriger une erreur.</div></div></div>" + pointsCardsHtml(rows, comp) + "</div>" +
-      "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + rows.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Points</th><th>Bruts</th><th>Personnes</th><th>Valides</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(rows, comp) + "</tbody></table></div></div>";
+      "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Attribuer des points</h2><div class=\"subnav-note\">Chaque correction crée une transaction historisée avec motif obligatoire.</div></div></div>" + pointsCardsHtml(activeAdminParticipants, comp) + "</div>" +
+      "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + adminParticipants.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Points</th><th>Bruts</th><th>Personnes</th><th>Valides</th><th>Statut</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(adminParticipants, comp) + "</tbody></table></div></div>";
   } else if (view === "settings") {
     const currentProfile = profileAvatarHtml(profile, comp.name);
     const dbConfig = await getCompetitionConfig(comp.id);
