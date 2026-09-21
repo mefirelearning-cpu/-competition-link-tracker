@@ -1183,6 +1183,7 @@ async function adminAnalyticsContent(comp) {
     return "<tr><td><div class=\"person\">" + esc(x.name) + "</div><div class=\"code\">" + esc(x.product||"") + "</div></td><td>" + Number(x.raw_clicks||0) + "</td><td>" + Number(x.unique_clicks||0) + "</td><td>" + Number(x.valid_clicks||0) + "</td><td>" + interests + "</td><td>" + leads + "</td><td>" + sales + "</td><td>" + conversion + "%</td><td>" + Number(x.revenue||0) + " XAF</td></tr>";
   }).join(""):"<tr><td colspan=\"9\" class=\"empty\">Aucune campagne.</td></tr>";
   const pointRows=data.pointTypes.length?data.pointTypes.map(x=>"<tr><td>" + esc(x.type) + "</td><td>" + Number(x.transactions||0) + "</td><td class=\"points-col\">" + Number(x.points||0) + "</td></tr>").join(""):"<tr><td colspan=\"3\" class=\"empty\">Aucune transaction de points.</td></tr>";
+  const sourceRows=data.sources.length?data.sources.map(x=>"<tr><td>" + esc(x.channel) + "</td><td>" + Number(x.shares||0) + "</td><td>" + Number(x.rewarded_shares||0) + "</td><td class=\"points-col\">" + Number(x.points||0) + "</td></tr>").join(""):"<tr><td colspan=\"4\" class=\"empty\">Aucun partage enregistré.</td></tr>";
 
   return pageTitleHtml("Statistiques","Vue consolidée du trafic, des conversions et des points.") +
     "<div class=\"metric-grid\">" +
@@ -1200,6 +1201,7 @@ async function adminAnalyticsContent(comp) {
       "<div class=\"card span12\"><div class=\"section-title\"><h2>14 derniers jours</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Jour</th><th>Bruts</th><th>Uniques</th><th>Valides</th><th>Intérêts</th><th>Leads</th><th>Ventes</th></tr></thead><tbody>" + dailyRows + "</tbody></table></div></div>" +
       "<div class=\"card span12\"><div class=\"section-title\"><h2>Performance par campagne</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Campagne</th><th>Bruts</th><th>Uniques</th><th>Valides</th><th>Intérêts</th><th>Leads</th><th>Ventes</th><th>Conv.</th><th>Revenu</th></tr></thead><tbody>" + campaignRows + "</tbody></table></div></div>" +
       "<div class=\"card span6\"><div class=\"section-title\"><h2>Points générés</h2><span class=\"score-badge\">" + Number(s.points_generated||0) + " pts</span></div><div class=\"table-wrap\"><table><thead><tr><th>Type</th><th>Transactions</th><th>Points</th></tr></thead><tbody>" + pointRows + "</tbody></table></div></div>" +
+      "<div class=\"card span6\"><div class=\"section-title\"><h2>Partages par source</h2></div><div class=\"table-wrap\"><table><thead><tr><th>Canal</th><th>Partages</th><th>Récompensés</th><th>Points</th></tr></thead><tbody>" + sourceRows + "</tbody></table></div></div>" +
     "</div>";
 }
 
