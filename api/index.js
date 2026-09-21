@@ -4,6 +4,14 @@ import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdm
 import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
 import { trackReferralVisit } from "../lib/referral-tracking.js";
 import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule } from "../lib/scoring.js";
+import { getVisitorIdentity } from "../lib/referral-tracking.js";
+import { getCompetitionConfig, updateCompetitionConfig, resizeCompetitionDays, ensureCompetitionLifecycle } from "../lib/competition-config.js";
+import { getFraudSettings, updateFraudSettings, listFraudFlags, resolveFraudFlag } from "../lib/fraud.js";
+import { createAnnouncement, listParticipantNotifications, markNotificationRead } from "../lib/notifications.js";
+import { listPrizes, addPrize, listRewardTiers, addRewardTier, freezeFinalRanking, selectPrize, generateRewardCoupons, participantRewards } from "../lib/rewards.js";
+import { createInterest, listProspects, confirmLead, confirmSale, rejectInterest, participantConversionStats } from "../lib/conversions.js";
+import { listCompetitionDays, getActiveDay, listDayMissions, createCompetitionDay, createMission, claimDailyReward, addStreakRule } from "../lib/competition-days.js";
+import { listCampaigns, getCampaignBySlug, createCampaign, updateCampaignStatus, deleteCampaign, recordCampaignShare, getCampaignStats } from "../lib/marketing.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
 const PREFIX = "ctl:v2";
@@ -495,7 +503,13 @@ function competitionSidebar(comp, view, profile) {
     ["ranking","Classement","/c/" + id + "/ranking"],
     ["live","Graphique live","/c/" + id + "/live"],
     ["participants","Participants","/c/" + id + "/participants"],
+    ["campaigns","Affiches & campagnes","/c/" + id + "/campaigns"],
+    ["days","Journées & événements","/c/" + id + "/days"],
+    ["prospects","Prospects & ventes","/c/" + id + "/prospects"],
     ["scoring","Points & bonus","/c/" + id + "/scoring"],
+    ["rewards","Récompenses","/c/" + id + "/rewards"],
+    ["fraud","Anti-fraude","/c/" + id + "/fraud"],
+    ["notifications","Notifications","/c/" + id + "/notifications"],
     ["settings","Paramètres","/c/" + id + "/settings"]
   ];
   return "<aside class=\"side\">" +
@@ -918,7 +932,7 @@ export default async function handler(req, res) {
       const parts = path.split("/").map(decodeURIComponent);
       const id = parts[1] || "";
       const view = parts[2] || "overview";
-      const allowedViews = ["overview","links","ranking","live","participants","scoring","settings"];
+      const allowedViews = ["overview","links","ranking","live","participants","campaigns","days","prospects","scoring","rewards","fraud","notifications","settings"];
       const comp = await findCompetition(id);
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
       if (!allowedViews.includes(view)) return send(res, 404, "Rubrique introuvable", "text/plain; charset=utf-8");
