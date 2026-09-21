@@ -1187,6 +1187,10 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
       "</div>" +
       "<div class=\"card\" style=\"margin-bottom:14px\"><div class=\"section-title\"><div><h2>Attribuer des points</h2><div class=\"subnav-note\">Chaque correction crée une transaction historisée avec motif obligatoire.</div></div></div>" + pointsCardsHtml(activeAdminParticipants, comp) + "</div>" +
       "<div class=\"card\"><div class=\"section-title\"><h2>Liste des participants</h2><span class=\"small muted\">" + adminParticipants.length + " au total</span></div><div class=\"table-wrap\"><table class=\"participant-table\"><thead><tr><th>Participant</th><th>Rang</th><th>Points</th><th>Bruts</th><th>Personnes</th><th>Valides</th><th>Statut</th><th>Lien</th><th>Action</th></tr></thead><tbody>" + participantAdminRows(adminParticipants, comp) + "</tbody></table></div></div>";
+  } else if (view === "analytics") {
+    content = await adminAnalyticsContent(comp);
+  } else if (view === "audit") {
+    content = await adminAuditContent(comp);
   } else if (view === "settings") {
     const currentProfile = profileAvatarHtml(profile, comp.name);
     const dbConfig = await getCompetitionConfig(comp.id);
