@@ -617,6 +617,45 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
     content = pageTitleHtml("Graphique live","Visualise la position actuelle de tous les participants.") +
       statsHtml +
       "<div class=\"card\"><div class=\"section-title\"><h2>Position en temps réel</h2><div class=\"live\"><span class=\"pulse\"></span><span>actualisation toutes les 5 s</span><span id=\"updatedAt\"></span></div></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div>";
+  } else if (view === "scoring") {
+    const scoring = await getScoringConfig(comp.id);
+    const clickRule = scoring.rules.find(r => r.action_type === "valid_click") || {
+      enabled: true,
+      base_points: 1,
+      multiplier: 1,
+      daily_cap_points: 60
+    };
+    const burstRows = scoring.bursts.length
+      ? scoring.bursts.map(rule =>
+          "<tr><td><div class=\"person\">" + esc(rule.name) + "</div></td>" +
+          "<td>" + rule.threshold + " valides</td><td>" + rule.window_minutes + " min</td>" +
+          "<td class=\"points-col\">+" + rule.bonus_points + "</td><td>" + rule.daily_limit + "/jour</td>" +
+          "<td>" + (rule.enabled ? "Actif" : "Inactif") + "</td>" +
+          "<td><form method=\"post\" action=\"/api/competition/" + id + "/burst-delete\"><input type=\"hidden\" name=\"ruleId\" value=\"" + esc(rule.id) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></td></tr>"
+        ).join("")
+      : "<tr><td colspan=\"7\" class=\"empty\">Aucun bonus burst configuré.</td></tr>";
+
+    content = pageTitleHtml("Points & bonus","Configure le scoring des clics valides et les bonus de trafic sans modifier le code.") +
+      "<div class=\"grid\">" +
+        "<div class=\"card span6\"><div class=\"section-title\"><div><h2>Clic valide</h2><div class=\"subnav-note\">Appliqué uniquement aux visiteurs acceptés par l’anti-fraude.</div></div></div>" +
+          "<form method=\"post\" action=\"/api/competition/" + id + "/scoring-rule\"><div class=\"form-grid\">" +
+            "<div><label>Points par clic valide</label><input name=\"basePoints\" type=\"number\" min=\"0\" value=\"" + Number(clickRule.base_points || 0) + "\"></div>" +
+            "<div><label>Multiplicateur</label><input name=\"multiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"" + Number(clickRule.multiplier || 1) + "\"></div>" +
+            "<div><label>Plafond quotidien (points)</label><input name=\"dailyCapPoints\" type=\"number\" min=\"0\" value=\"" + (clickRule.daily_cap_points ?? "") + "\" placeholder=\"Vide = sans plafond\"></div>" +
+            "<div><label>État</label><select name=\"enabled\"><option value=\"1\"" + (clickRule.enabled ? " selected" : "") + ">Actif</option><option value=\"0\"" + (!clickRule.enabled ? " selected" : "") + ">Désactivé</option></select></div>" +
+            "<div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer le barème</button></div>" +
+          "</div></form><div class=\"notice\" style=\"margin-top:14px\">Les modifications s’appliquent aux nouvelles actions. Les anciennes transactions du ledger restent inchangées.</div></div>" +
+        "<div class=\"card span6\"><div class=\"section-title\"><div><h2>Nouveau bonus burst</h2><div class=\"subnav-note\">Récompense une activité réelle concentrée dans une fenêtre courte.</div></div></div>" +
+          "<form method=\"post\" action=\"/api/competition/" + id + "/burst-add\"><div class=\"form-grid\">" +
+            "<div class=\"full\"><label>Nom</label><input name=\"name\" maxlength=\"80\" placeholder=\"Ex. Boost 10 visiteurs\" required></div>" +
+            "<div><label>Seuil de clics valides</label><input name=\"threshold\" type=\"number\" min=\"1\" required></div>" +
+            "<div><label>Fenêtre (minutes)</label><input name=\"windowMinutes\" type=\"number\" min=\"1\" required></div>" +
+            "<div><label>Bonus points</label><input name=\"bonusPoints\" type=\"number\" required></div>" +
+            "<div><label>Maximum / jour</label><input name=\"dailyLimit\" type=\"number\" min=\"1\" value=\"1\" required></div>" +
+            "<div class=\"full\"><button class=\"btn\" type=\"submit\">Ajouter la règle</button></div>" +
+          "</div></form></div>" +
+        "<div class=\"card span12\"><div class=\"section-title\"><h2>Bonus burst configurés</h2><span class=\"small muted\">" + scoring.bursts.length + " règle(s)</span></div><div class=\"table-wrap\"><table><thead><tr><th>Nom</th><th>Seuil</th><th>Fenêtre</th><th>Bonus</th><th>Limite</th><th>État</th><th>Action</th></tr></thead><tbody>" + burstRows + "</tbody></table></div></div>" +
+      "</div>";
   } else if (view === "participants") {
     content = pageTitleHtml("Participants","Ajoute les participants individuellement ou en masse.") +
       success +
