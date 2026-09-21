@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from "node:crypto";
 import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipants, shadowWithdrawParticipant, shadowSyncStats, shadowRecordAdminAdjustment, shadowSyncCompetitionSettings } from "../lib/shadow-store.js";
 import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdminSession, destroyAdminSession, sameOriginRequest, loginNextPath } from "../lib/admin-auth.js";
-import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
+import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, joinExistingParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
 import { trackReferralVisit } from "../lib/referral-tracking.js";
 import { getScoringConfig, updateValidClickRule, createBurstRule, deleteBurstRule, recalculatePointTransactions } from "../lib/scoring.js";
 import { getVisitorIdentity } from "../lib/referral-tracking.js";
@@ -397,6 +397,21 @@ function joinPage(comp, message = "", values = {}) {
       "</form><div class=\"p-small p-muted\" style=\"margin-top:12px\">Ton numéro WhatsApp reste privé et n’apparaît jamais dans le classement public.</div></div>" +
       "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Comment ça marche</h2></div><div class=\"p-notice\">Après ton inscription, la plateforme crée ton lien personnel. Tu peux le partager à tes contacts et suivre ton rang, tes points et l’activité générée depuis ton espace.</div><div class=\"p-actions\"><a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(comp.id) + "\">Voir le classement</a><a class=\"p-btn2\" href=\"/participant/login\">J’ai déjà un compte</a></div></div></div>";
   return participantShell("Participer — " + comp.name, body);
+}
+
+function joinExistingPage(comp, whatsapp, message = "") {
+  const body = participantTop(null) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Compte existant</div><h1>" + esc(comp.name) + "</h1><p>Ce numéro possède déjà un compte. Entre ton code privé pour rejoindre cette compétition.</p></section>" +
+    "<div class=\"p-card\" style=\"width:min(520px,100%);margin:0 auto\">" +
+      (message ? "<div class=\"p-notice p-error\" style=\"margin-bottom:12px\">" + esc(message) + "</div>" : "") +
+      "<form class=\"p-form\" method=\"post\" action=\"/join/" + encodeURIComponent(comp.id) + "\">" +
+        "<input type=\"hidden\" name=\"whatsapp\" value=\"" + esc(whatsapp) + "\">" +
+        "<input type=\"hidden\" name=\"existingAccount\" value=\"1\">" +
+        "<div><label>Code privé</label><input name=\"existingCode\" inputmode=\"numeric\" maxlength=\"6\" autocomplete=\"one-time-code\" required></div>" +
+        "<button class=\"p-btn\" type=\"submit\">Rejoindre la compétition</button>" +
+      "</form><div class=\"p-actions\"><a class=\"p-btn2\" href=\"/participant/login\">Me connecter à mon compte</a></div>" +
+    "</div>";
+  return participantShell("Rejoindre — " + comp.name, body);
 }
 
 function joinSuccessPage(result, origin) {
@@ -1389,7 +1404,45 @@ export default async function handler(req, res) {
         const whatsapp = String(b.whatsapp || "").trim();
         const referralCode = await uniqueParticipantCode(competitionId, "p-" + randomBytes(4).toString("hex"));
 
-        const result = await registerParticipantAccount({
+        let result;
+
+        if (String(b.existingAccount || "") === "1") {
+          result = await joinExistingParticipantAccount({
+            req,
+            competitionId,
+            whatsapp,
+            code:b.existingCode,
+            referralCode
+          });
+
+          if (!result.ok) {
+            const msg = result.reason === "rate_limited"
+              ? "Trop de tentatives. Réessaie dans quelques minutes."
+              : result.reason === "competition_full"
+                ? "Le nombre maximum de participants a été atteint."
+                : result.reason === "registrations_closed"
+                  ? "Les inscriptions sont actuellement fermées."
+                  : "Code privé incorrect.";
+            return send(res,result.reason==="rate_limited"?429:400,joinExistingPage(dbComp,whatsapp,msg));
+          }
+
+          const participants = await getParticipants(competitionId);
+          if (!participants.some(x=>x.code===result.referralCode)) {
+            participants.push({
+              name:result.pseudonym,
+              code:result.referralCode,
+              active:true,
+              createdAt:new Date().toISOString(),
+              selfRegistered:true,
+              existingAccount:true
+            });
+            await saveParticipants(competitionId,participants);
+          }
+          await createParticipantSession(req,res,result.participantId,competitionId);
+          return redirect(res,"/me/"+encodeURIComponent(competitionId),303);
+        }
+
+        result = await registerParticipantAccount({
           competitionId,
           pseudonym,
           whatsapp,
@@ -1403,9 +1456,11 @@ export default async function handler(req, res) {
             competition_not_found: "Compétition introuvable.",
             registrations_closed: "Les inscriptions sont actuellement fermées.",
             competition_full: "Le nombre maximum de participants a été atteint.",
-            account_exists: "Un compte existe déjà avec ce numéro WhatsApp. Utilise la page de connexion.",
             duplicate: "Cette inscription existe déjà. Essaie de te connecter."
           };
+          if (result.reason === "account_exists") {
+            return send(res,409,joinExistingPage(dbComp,whatsapp));
+          }
           return send(res, 400, joinPage(dbComp, messages[result.reason] || "Impossible de créer le compte.", {pseudonym, whatsapp}));
         }
 
