@@ -2292,6 +2292,42 @@ export default async function handler(req, res) {
         return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
       }
 
+      if (action === "prize-update" && req.method === "POST") {
+        const b=parseBody(req);
+        const result=await updatePrize({
+          competitionId:id,
+          prizeId:String(b.prizeId||""),
+          name:b.name,
+          description:b.description,
+          durationText:b.durationText,
+          sortOrder:b.sortOrder,
+          adminId:"admin"
+        });
+        if(!result.ok) return send(res,400,"Modification du lot impossible.","text/plain; charset=utf-8");
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
+      }
+
+      if (action === "prize-delete" && req.method === "POST") {
+        const b=parseBody(req);
+        await deletePrize({
+          competitionId:id,
+          prizeId:String(b.prizeId||""),
+          adminId:"admin"
+        });
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
+      }
+
+      if (action === "prize-move" && req.method === "POST") {
+        const b=parseBody(req);
+        await movePrize({
+          competitionId:id,
+          prizeId:String(b.prizeId||""),
+          direction:String(b.direction||"down"),
+          adminId:"admin"
+        });
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
+      }
+
       if (action === "tier-add" && req.method === "POST") {
         const b = parseBody(req);
         await addRewardTier({
@@ -2307,6 +2343,49 @@ export default async function handler(req, res) {
           adminId:"admin"
         });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/rewards", 303);
+      }
+
+      if (action === "tier-update" && req.method === "POST") {
+        const b=parseBody(req);
+        const result=await updateRewardTier({
+          competitionId:id,
+          tierId:String(b.tierId||""),
+          minPoints:b.minPoints,
+          maxPoints:b.maxPoints,
+          rewardType:b.rewardType,
+          rewardValue:b.rewardValue,
+          validityDays:b.validityDays,
+          eligibleServices:String(b.eligibleServices||"").split(",").map(x=>x.trim()).filter(Boolean),
+          conditions:b.conditions,
+          sortOrder:b.sortOrder,
+          enabled:String(b.enabled||"")==="1",
+          adminId:"admin"
+        });
+        if(!result.ok){
+          return send(res,400,result.reason==="invalid_range"?"Le maximum doit être supérieur ou égal au minimum.":"Modification du palier impossible.","text/plain; charset=utf-8");
+        }
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
+      }
+
+      if (action === "tier-delete" && req.method === "POST") {
+        const b=parseBody(req);
+        await deleteRewardTier({
+          competitionId:id,
+          tierId:String(b.tierId||""),
+          adminId:"admin"
+        });
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
+      }
+
+      if (action === "tier-move" && req.method === "POST") {
+        const b=parseBody(req);
+        await moveRewardTier({
+          competitionId:id,
+          tierId:String(b.tierId||""),
+          direction:String(b.direction||"down"),
+          adminId:"admin"
+        });
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/rewards",303);
       }
 
       if (action === "admin-prize-select" && req.method === "POST") {
