@@ -1,5 +1,6 @@
 import { createHash, randomBytes } from "node:crypto";
 import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipants, shadowWithdrawParticipant, shadowSyncStats, shadowRecordAdminAdjustment, shadowSyncCompetitionSettings } from "../lib/shadow-store.js";
+import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdminSession, destroyAdminSession, sameOriginRequest, loginNextPath } from "../lib/admin-auth.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
 const PREFIX = "ctl:v2";
@@ -212,8 +213,43 @@ function pageShell(title, body, extraScript = "") {
 }
 
 function topNav() {
+  const auth = adminAuthConfigured();
   return "<div class=\"top\"><a class=\"brand\" href=\"/admin\"><span class=\"mark\">CL</span><span>Competition Link Tracker</span></a>" +
-    "<div class=\"nav\"><a class=\"btn2\" href=\"/admin\">Dashboard</a></div></div>";
+    "<div class=\"nav\"><a class=\"btn2\" href=\"/admin\">Dashboard</a>" +
+    (auth
+      ? "<form method=\"post\" action=\"/admin/logout\" style=\"margin:0\"><button class=\"btn2\" type=\"submit\">Déconnexion</button></form>"
+      : "<span class=\"status dangerText\">Admin non protégé</span>") +
+    "</div></div>";
+}
+
+function loginPage(message = "", next = "/admin") {
+  const body =
+    "<div style=\"min-height:78vh;display:grid;place-items:center;padding:18px\">" +
+      "<div class=\"card\" style=\"width:min(440px,100%);padding:26px;box-shadow:none\">" +
+        "<div class=\"brand\" style=\"margin-bottom:22px\"><span class=\"mark\">CL</span><span>Competition Link Tracker</span></div>" +
+        "<div class=\"eyebrow\" style=\"color:#666\">Accès administrateur</div>" +
+        "<h1 style=\"font-size:32px;letter-spacing:-.04em;margin:8px 0 10px\">Connexion</h1>" +
+        "<p class=\"muted\" style=\"margin:0 0 18px;line-height:1.5\">Entre ton nom d’utilisateur et ton code administrateur.</p>" +
+        (message ? "<div class=\"notice dangerText\" style=\"margin-bottom:14px\">" + esc(message) + "</div>" : "") +
+        "<form method=\"post\" action=\"/admin/login\">" +
+          "<input type=\"hidden\" name=\"next\" value=\"" + esc(next) + "\">" +
+          "<div style=\"display:grid;gap:12px\">" +
+            "<div><label>Nom d’utilisateur</label><input name=\"username\" autocomplete=\"username\" required></div>" +
+            "<div><label>Code administrateur</label><input name=\"code\" type=\"password\" autocomplete=\"current-password\" required></div>" +
+            "<button class=\"btn\" type=\"submit\" style=\"width:100%;margin-top:2px\">Se connecter</button>" +
+          "</div>" +
+        "</form>" +
+      "</div>" +
+    "</div>";
+  return pageShell("Connexion administrateur", body);
+}
+
+async function ensureAdminAccess(req, res, nextPath) {
+  if (!adminAuthConfigured()) return true;
+  const session = await getAdminSession(req);
+  if (session) return true;
+  redirect(res, "/admin/login?next=" + encodeURIComponent(loginNextPath(nextPath)), 303);
+  return false;
 }
 
 
@@ -563,11 +599,58 @@ export default async function handler(req, res) {
     const origin = "https://" + req.headers.host;
     await ensureLegacyMigration();
 
-    if (path === "" || path === "admin") {
+    if (path === "") {
+      return redirect(res, "/admin", 302);
+    }
+
+    if (path === "admin/login") {
+      const next = loginNextPath(req.query?.next || parseBody(req).next || "/admin");
+
+      if (req.method === "GET") {
+        if (adminAuthConfigured() && await getAdminSession(req)) {
+          return redirect(res, next, 302);
+        }
+        const message = adminAuthConfigured()
+          ? ""
+          : "La protection administrateur n’est pas encore configurée dans Vercel.";
+        return send(res, adminAuthConfigured() ? 200 : 503, loginPage(message, next));
+      }
+
+      if (req.method === "POST") {
+        if (!sameOriginRequest(req)) {
+          return send(res, 403, loginPage("Requête refusée.", next));
+        }
+        const b = parseBody(req);
+        const checked = await verifyAdminCredentials(req, b.username, b.code);
+        if (!checked.ok) {
+          const msg = checked.reason === "rate_limited"
+            ? "Trop de tentatives. Réessaie dans quelques minutes."
+            : checked.reason === "not_configured"
+              ? "La protection administrateur n’est pas encore configurée."
+              : "Nom d’utilisateur ou code incorrect.";
+          return send(res, checked.reason === "rate_limited" ? 429 : 401, loginPage(msg, next));
+        }
+        await createAdminSession(req, res);
+        return redirect(res, next, 303);
+      }
+
+      return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
+    }
+
+    if (path === "admin/logout") {
+      if (req.method !== "POST") return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
+      if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+      await destroyAdminSession(req, res);
+      return redirect(res, "/admin/login", 303);
+    }
+
+    if (path === "admin") {
+      if (!await ensureAdminAccess(req, res, "/admin")) return;
       return send(res, 200, await dashboardPage(origin));
     }
 
     if (path.startsWith("c/")) {
+      if (!await ensureAdminAccess(req, res, "/" + path)) return;
       const parts = path.split("/").map(decodeURIComponent);
       const id = parts[1] || "";
       const view = parts[2] || "overview";
@@ -609,6 +692,8 @@ export default async function handler(req, res) {
     }
 
     if (path === "api/competition/create" && req.method === "POST") {
+      if (!await ensureAdminAccess(req, res, "/admin")) return;
+      if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
       const b = parseBody(req);
       const name = String(b.name || "").trim();
       if (!name) return send(res, 400, "Nom requis", "text/plain; charset=utf-8");
@@ -639,6 +724,11 @@ export default async function handler(req, res) {
       if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
 
       if (action === "stats" && req.method === "GET") return apiStats(res, comp);
+
+      if (!await ensureAdminAccess(req, res, "/c/" + encodeURIComponent(id))) return;
+      if (req.method === "POST" && !sameOriginRequest(req)) {
+        return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
+      }
 
       if (action === "add" && req.method === "POST") {
         const b = parseBody(req);
