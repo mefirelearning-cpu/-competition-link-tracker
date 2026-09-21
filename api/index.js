@@ -799,7 +799,7 @@ function pointsCardsHtml(rows, comp) {
     "<form method=\"post\" action=\"/api/competition/" + id + "/points\">" +
       "<input type=\"hidden\" name=\"code\" value=\"" + esc(r.code) + "\">" +
       "<div class=\"quick-points\"><button name=\"quickAmount\" value=\"5\" type=\"submit\">+5</button><button name=\"quickAmount\" value=\"10\" type=\"submit\">+10</button><button name=\"quickAmount\" value=\"20\" type=\"submit\">+20</button><button name=\"quickAmount\" value=\"50\" type=\"submit\">+50</button></div>" +
-      "<div class=\"point-custom\"><input name=\"amount\" type=\"number\" step=\"1\" min=\"-10000\" max=\"10000\" placeholder=\"± pts\"><input name=\"reason\" maxlength=\"80\" placeholder=\"Motif : abonnement, bonus…\"><button class=\"btn\" type=\"submit\">Valider</button></div>" +
+      "<div class=\"point-custom\"><input name=\"amount\" type=\"number\" step=\"1\" min=\"-10000\" max=\"10000\" placeholder=\"± pts\"><input name=\"reason\" maxlength=\"120\" placeholder=\"Motif obligatoire : vente, bonus, correction…\" required><button class=\"btn\" type=\"submit\">Valider</button></div>" +
     "</form></article>"
   ).join("") + "</div>";
 }
@@ -1819,6 +1819,36 @@ export default async function handler(req, res) {
         return redirect(res, "/c/" + encodeURIComponent(id) + "/links", 303);
       }
 
+      if (action === "participant-status" && req.method === "POST") {
+        const b = parseBody(req);
+        const participantId = String(b.participantId || "");
+        const actionStatus = String(b.action || "");
+        const reason = String(b.reason || "").trim();
+        if (!participantId || !reason) {
+          return send(res, 400, "Participant et motif requis", "text/plain; charset=utf-8");
+        }
+        const result = await setParticipantCompetitionStatus({
+          competitionId:id,
+          participantId,
+          action:actionStatus,
+          reason,
+          adminId:"admin"
+        });
+        if (!result.ok) return send(res,404,"Participant introuvable","text/plain; charset=utf-8");
+
+        const state = await listAdminParticipants(id);
+        const current = state.find(x=>x.participantId===participantId);
+        if (current) {
+          const legacyParticipants = await getParticipants(id);
+          const idx = legacyParticipants.findIndex(x=>x.code===current.code);
+          if (idx >= 0) {
+            legacyParticipants[idx].active = actionStatus === "active";
+            await saveParticipants(id, legacyParticipants);
+          }
+        }
+        return redirect(res, "/c/" + encodeURIComponent(id) + "/participants", 303);
+      }
+
       if (action === "delete-participant" && req.method === "POST") {
         const b = parseBody(req);
         const code = String(b.code || "");
@@ -1869,6 +1899,9 @@ export default async function handler(req, res) {
 
       if (action === "points" && req.method === "POST") {
         const b = parseBody(req);
+        if (!String(b.reason || "").trim()) {
+          return send(res, 400, "Le motif de l’ajustement est obligatoire.", "text/plain; charset=utf-8");
+        }
         const code = String(b.code || "").trim();
         const amount = Number.parseInt(String(b.quickAmount || b.amount || ""), 10);
         const reason = String(b.reason || "").trim().slice(0, 80);
