@@ -1101,7 +1101,7 @@ async function adminDaysContent(comp) {
 
   return pageTitleHtml("Journées & événements","Durée libre, journées programmées, missions, check-ins et bonus de série.") +
     "<div class=\"grid\" style=\"margin-bottom:14px\">" +
-      "<div class=\"card span4\"><div class=\"section-title\"><h2>Durée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/days-resize\"><label>Nombre de jours</label><div class=\"actions\"><input name=\"dayCount\" type=\"number\" min=\"1\" max=\"365\" value=\"" + Math.max(1,days.length||1) + "\" style=\"max-width:160px\"><button class=\"btn\" type=\"submit\">Appliquer</button></div><div class=\"footer-note\">Une réduction protège les journées déjà configurées par une confirmation.</div></form></div>" +
+      "<div class=\"card span4\"><div class=\"section-title\"><h2>Durée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/days-resize\"><label>Nombre de jours</label><div class=\"actions\"><input name=\"dayCount\" type=\"number\" min=\"1\" max=\"365\" value=\"" + Math.max(1,days.length||1) + "\" style=\"max-width:160px\"><button class=\"btn\" type=\"submit\">Appliquer</button></div><div class=\"footer-note\">La date de fin est recalée automatiquement si une date de début existe.</div></form><form method=\"post\" action=\"/api/competition/" + id + "/days-extend\" style=\"margin-top:12px\"><label>Prolonger rapidement</label><div class=\"actions\"><button class=\"btn2\" name=\"delta\" value=\"1\" type=\"submit\">+1 jour</button><button class=\"btn2\" name=\"delta\" value=\"4\" type=\"submit\">+4 jours</button><button class=\"btn2\" name=\"delta\" value=\"7\" type=\"submit\">+7 jours</button></div></form></div>" +
       "<div class=\"card span8\"><div class=\"section-title\"><h2>Créer / modifier une journée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/day-save\"><div class=\"form-grid\"><div><label>N° jour</label><input name=\"dayNumber\" type=\"number\" min=\"1\" required></div><div><label>Titre</label><input name=\"title\" required placeholder=\"GEMINI TAKEOVER\"></div><div><label>Récompense quotidienne</label><input name=\"rewardDailyPoints\" type=\"number\" value=\"0\"></div><div><label>Statut</label><select name=\"status\"><option value=\"draft\">Brouillon</option><option value=\"scheduled\">Programmé</option><option value=\"active\">Actif</option><option value=\"finished\">Terminé</option></select></div><div><label>Début</label><input class=\"config-datetime\" name=\"startsAt\" type=\"datetime-local\"></div><div><label>Fin</label><input class=\"config-datetime\" name=\"endsAt\" type=\"datetime-local\"></div><div class=\"full\"><label>Campagne vedette</label><select name=\"featuredCampaignId\">" + campaignOptions + "</select></div><div class=\"full\"><label>Description</label><textarea name=\"description\"></textarea></div><div class=\"full\"><label>Message marketing</label><textarea name=\"marketingMessage\"></textarea></div><div class=\"full\"><label>Notification du jour</label><input name=\"notificationText\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer la journée</button></div></div></form></div>" +
     "</div>" +
     "<div class=\"grid\">" + dayCards + "</div>" +
@@ -2171,6 +2171,19 @@ export default async function handler(req, res) {
           );
         }
         return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "days-extend" && req.method === "POST") {
+        const b=parseBody(req);
+        const delta=Math.max(1,Math.min(90,Number.parseInt(String(b.delta||"1"),10)||1));
+        const currentDays=(await listCompetitionDays(id)).length;
+        await resizeCompetitionDays({
+          competitionId:id,
+          dayCount:Math.max(1,currentDays)+delta,
+          force:false,
+          adminId:"admin"
+        });
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/days",303);
       }
 
       if (action === "streak-add" && req.method === "POST") {
