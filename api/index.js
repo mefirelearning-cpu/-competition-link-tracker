@@ -15,6 +15,7 @@ import { listCompetitionDays, getActiveDay, listDayMissions, createCompetitionDa
 import { listCampaigns, getCampaignBySlug, createCampaign, updateCampaign, updateCampaignStatus, deleteCampaign, recordCampaignShare, getCampaignStats } from "../lib/marketing.js";
 import { listAdminParticipants, setParticipantCompetitionStatus, listAuditLogs } from "../lib/admin-ops.js";
 import { getCompetitionAnalytics } from "../lib/analytics.js";
+import { getParticipantDetailedStats } from "../lib/participant-stats.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
 const PREFIX = "ctl:v2";
@@ -640,7 +641,7 @@ async function participantDashboardPage(origin, session) {
       "<div class=\"p-card p-span4 p-stat\"><span>Clics valides</span><b>" + valid + "</b></div>" +
       claimHtml + missionHtml +
       "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Ton lien personnel</h2><span class=\"p-small p-muted\">" + unique + " personne(s) distincte(s) · " + clicks + " ouverture(s)</span></div><div class=\"p-link\">" + esc(link) + "</div><div class=\"p-actions\"><button class=\"p-btn copy-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Copier</button><button class=\"p-btn2 share-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Partager</button><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(comp.id) + "/campaigns\">Voir les affiches</a></div></div>" +
-      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Progression</h2></div>" + motivation.map(x=>"<div class=\"p-notice\" style=\"margin-top:8px\">" + esc(x) + "</div>").join("") + "</div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Progression</h2></div>" + motivation.map(x=>"<div class=\"p-notice\" style=\"margin-top:8px\">" + esc(x) + "</div>").join("") + "<div class=\"p-actions\"><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(comp.id) + "/stats\">Voir mes statistiques</a></div></div>" +
       "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Conversions</h2></div><div class=\"p-grid\"><div class=\"p-stat p-span4\"><span>Intérêts</span><b>" + Number(conversions.interests||0) + "</b></div><div class=\"p-stat p-span4\"><span>Prospects</span><b>" + Number(conversions.leads||0) + "</b></div><div class=\"p-stat p-span4\"><span>Ventes</span><b>" + Number(conversions.sales||0) + "</b></div></div></div>" +
       "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Historique des points</h2></div>" + historyHtml + "</div>" +
       "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Notifications</h2></div>" + notifHtml + "</div>" +
@@ -684,6 +685,38 @@ async function participantCampaignsPage(origin, session) {
     "document.addEventListener('click',async e=>{const share=e.target.closest('.campaign-share');if(share){await markShare(share.dataset.campaign,'native');if(navigator.share){try{await navigator.share({title:'Offre',text:share.dataset.text,url:share.dataset.link})}catch{}}else{try{await navigator.clipboard.writeText(share.dataset.text);alert('Texte et lien copiés')}catch{}}return}const copy=e.target.closest('.campaign-copy');if(copy){await markShare(copy.dataset.campaign,'copy');try{await navigator.clipboard.writeText(copy.dataset.value);copy.textContent='Copié ✓'}catch{prompt('Copie :',copy.dataset.value)}return}const social=e.target.closest('.campaign-social');if(social){markShare(social.dataset.campaign,'social');return}const dl=e.target.closest('.campaign-download');if(dl){markShare(dl.dataset.campaign,'download');return}const tt=e.target.closest('.campaign-tiktok');if(tt){await markShare(tt.dataset.campaign,'tiktok');try{await navigator.clipboard.writeText(tt.dataset.text)}catch{}window.open('https://www.tiktok.com/','_blank')}});";
 
   return participantShell("Campagnes — " + comp.name, body, script);
+}
+
+async function participantStatsPage(session) {
+  const comp=await findCompetition(session.competition_id);
+  if(!comp) return participantShell("Compétition introuvable",participantTop(session));
+  const data=await getParticipantDetailedStats(comp.id,session.participant_id);
+  const s=data.summary||{};
+
+  const campaignRows=data.campaigns.length?data.campaigns.map(x=>
+    "<tr><td><div class=\"person\">" + esc(x.name) + "</div><div class=\"code\">" + esc(x.product||"") + "</div></td><td>" + Number(x.shares||0) + "</td><td>" + Number(x.valid_clicks||0) + "</td><td>" + Number(x.interests||0) + "</td><td>" + Number(x.leads||0) + "</td><td>" + Number(x.sales||0) + "</td><td><b>" + Number(x.points_generated||0) + "</b></td></tr>"
+  ).join(""):"<tr><td colspan=\"7\" class=\"p-muted\">Aucune campagne enregistrée.</td></tr>";
+
+  const historyRows=data.history.length?data.history.map(x=>
+    "<tr><td>" + esc(new Date(x.created_at).toLocaleString("fr-FR")) + "</td><td>" + esc(x.type) + "</td><td>" + esc(x.description||"") + "</td><td><b>" + (Number(x.final_points)>0?"+":"") + Number(x.final_points||0) + "</b></td></tr>"
+  ).join(""):"<tr><td colspan=\"4\" class=\"p-muted\">Aucune transaction de points.</td></tr>";
+
+  const body=participantTop(session) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Mes statistiques</div><h1>" + Number(s.total_points||0) + " points.</h1><p>Performance détaillée de tes liens, campagnes et actions validées.</p></section>" +
+    "<div class=\"p-grid\">" +
+      "<div class=\"p-card p-stat p-span4\"><span>Points aujourd’hui</span><b>" + Number(s.points_today||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Clics valides</span><b>" + Number(s.valid_clicks||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Partages</span><b>" + Number(s.shares||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Intérêts</span><b>" + Number(s.interests||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Prospects</span><b>" + Number(s.leads||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Ventes</span><b>" + Number(s.sales||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Check-ins</span><b>" + Number(s.checkins||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Missions confirmées</span><b>" + Number(s.missions_completed||0) + "</b></div>" +
+      "<div class=\"p-card p-stat p-span4\"><span>Personnes distinctes</span><b>" + Number(s.unique_clicks||0) + "</b></div>" +
+      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Performance par campagne</h2></div><div style=\"overflow:auto\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"text-align:left;padding:8px\">Campagne</th><th style=\"text-align:left;padding:8px\">Partages</th><th style=\"text-align:left;padding:8px\">Valides</th><th style=\"text-align:left;padding:8px\">Intérêts</th><th style=\"text-align:left;padding:8px\">Leads</th><th style=\"text-align:left;padding:8px\">Ventes</th><th style=\"text-align:left;padding:8px\">Points</th></tr></thead><tbody>" + campaignRows + "</tbody></table></div></div>" +
+      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Historique des points</h2><span class=\"p-small p-muted\">40 dernières transactions</span></div><div style=\"overflow:auto\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"text-align:left;padding:8px\">Date</th><th style=\"text-align:left;padding:8px\">Type</th><th style=\"text-align:left;padding:8px\">Détail</th><th style=\"text-align:left;padding:8px\">Points</th></tr></thead><tbody>" + historyRows + "</tbody></table></div></div>" +
+    "</div>" + participantBottom(session,"home");
+  return participantShell("Mes statistiques — "+comp.name,body);
 }
 
 async function participantRewardsPage(origin, session) {
@@ -1843,6 +1876,7 @@ export default async function handler(req, res) {
       if (!session) return redirect(res, "/participant/login", 303);
       if (view === "home") return send(res, 200, await participantDashboardPage(origin, session));
       if (view === "campaigns") return send(res, 200, await participantCampaignsPage(origin, session));
+      if (view === "stats") return send(res, 200, await participantStatsPage(session));
       if (view === "rewards") return send(res, 200, await participantRewardsPage(origin, session));
       if (view === "rules") return send(res, 200, await participantRulesPage(session));
       return send(res, 404, "Rubrique introuvable", "text/plain; charset=utf-8");
