@@ -1856,6 +1856,13 @@ export default async function handler(req, res) {
       await saveCompetitions(comps);
       await saveParticipants(id, []);
       await shadowUpsertCompetition(comp);
+      await logAdminAction({
+        action:"competition_created",
+        entityType:"competition",
+        entityId:id,
+        description:"Compétition créée",
+        metadata:{competitionId:id,status:comp.status,winnerCount:comp.winnerCount}
+      });
       return redirect(res, "/c/" + encodeURIComponent(id), 303);
     }
 
@@ -2086,6 +2093,13 @@ export default async function handler(req, res) {
           competitionId:id,
           consecutiveDays:b.consecutiveDays,
           bonusPoints:b.bonusPoints
+        });
+        await logAdminAction({
+          action:"streak_rule_saved",
+          entityType:"competition",
+          entityId:id,
+          description:"Bonus de série enregistré",
+          metadata:{competitionId:id,consecutiveDays:b.consecutiveDays,bonusPoints:b.bonusPoints}
         });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
       }
@@ -2463,6 +2477,13 @@ export default async function handler(req, res) {
         comps[i].theme = themes.includes(theme) ? theme : "blue";
         await saveCompetitions(comps);
         await shadowSyncCompetitionSettings(comps[i]);
+        await logAdminAction({
+          action:"competition_status_changed",
+          entityType:"competition",
+          entityId:id,
+          description:"Statut ou palette de compétition modifié",
+          metadata:{competitionId:id,status,theme:comps[i].theme}
+        });
         if (status === "ended") {
           await freezeFinalRanking(id,"admin");
           await generateRewardCoupons(id,"admin");
@@ -2475,6 +2496,13 @@ export default async function handler(req, res) {
         const b = parseBody(req);
         if (String(b.remove || "") === "1") {
           await saveProfile(id, "");
+          await logAdminAction({
+            action:"competition_profile_removed",
+            entityType:"competition",
+            entityId:id,
+            description:"Photo de compétition supprimée",
+            metadata:{competitionId:id}
+          });
           return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
         }
         const data = String(b.profileData || "");
@@ -2485,6 +2513,13 @@ export default async function handler(req, res) {
           return send(res, 413, "Image trop lourde après compression", "text/plain; charset=utf-8");
         }
         await saveProfile(id, data);
+        await logAdminAction({
+          action:"competition_profile_updated",
+          entityType:"competition",
+          entityId:id,
+          description:"Photo de compétition modifiée",
+          metadata:{competitionId:id}
+        });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/settings", 303);
       }
 
