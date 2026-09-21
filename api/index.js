@@ -338,6 +338,37 @@ async function participantDashboardPage(origin, session) {
 }
 
 
+async function publicLandingPage() {
+  const legacyComps = await getCompetitions();
+  const rows = (await Promise.all(legacyComps.map(async (comp) => {
+    try {
+      const db = await getJoinableCompetition(comp.id);
+      return db ? {...comp, db} : null;
+    } catch {
+      return {...comp, db:null};
+    }
+  }))).filter(Boolean).filter(x => ["active","scheduled"].includes(String(x.status || x.db?.status || "")));
+
+  const cards = rows.length ? rows.map(({db, ...comp}) => {
+    const open = db ? (db.status === "active" && db.registrations_open) : comp.status === "active";
+    const count = db?.participant_count ?? 0;
+    return "<article class=\"p-card p-span6\"><div class=\"p-title\"><div><div class=\"p-kicker\" style=\"color:#666\">" + esc(String(comp.status || db?.status || "").toUpperCase()) + "</div><h2 style=\"font-size:23px;margin-top:6px\">" + esc(comp.name) + "</h2></div><span class=\"p-small p-muted\">" + count + " participant(s)</span></div>" +
+      (comp.prize ? "<div class=\"p-notice\" style=\"margin-bottom:12px\"><b>Récompense :</b> " + esc(comp.prize) + "</div>" : "") +
+      "<div class=\"p-actions\">" +
+        (open ? "<a class=\"p-btn\" href=\"/join/" + encodeURIComponent(comp.id) + "\">Participer</a>" : "") +
+        "<a class=\"p-btn2\" href=\"/leaderboard/" + encodeURIComponent(comp.id) + "\">Classement</a>" +
+      "</div></article>";
+  }).join("") : "<div class=\"p-card p-span12\"><div class=\"p-muted\">Aucune compétition publique pour le moment.</div></div>";
+
+  const body = participantTop(null) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Plateforme de compétition</div><h1>Partage. Progresse. Classe-toi.</h1><p>Choisis une compétition active, crée ton accès et récupère immédiatement ton lien personnel.</p></section>" +
+    "<div class=\"p-title\" style=\"margin:20px 0 12px\"><h2>Compétitions disponibles</h2><a class=\"p-btn2\" href=\"/participant/login\">Mon espace</a></div>" +
+    "<div class=\"p-grid\">" + cards + "</div>";
+
+  return participantShell("Compétitions", body);
+}
+
+
 function podiumHtml(rows) {
   const top = rows.slice(0, 3);
   if (!top.length) return "";
@@ -541,7 +572,8 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
       "<div class=\"public-header\"><div class=\"public-brand\">" + profileAvatarHtml(profile, comp.name, "hero-avatar") +
         "<div><div class=\"eyebrow\">CLASSEMENT PUBLIC · LIVE</div><h1>" + esc(comp.name) + "</h1><p>Classement principal basé sur les points attribués.</p></div></div>" +
         "<div class=\"public-prize\"><span class=\"status\" style=\"background:#ffffff12;color:#fff;border-color:#ffffff20\"><span class=\"dot active\"></span>" + esc(comp.status) + "</span>" +
-        (comp.prize ? "<b style=\"margin-top:8px\">Récompense : " + esc(comp.prize) + "</b>" : "") + "</div></div>";
+        (comp.prize ? "<b style=\"margin-top:8px\">Récompense : " + esc(comp.prize) + "</b>" : "") +
+        (comp.status === "active" ? "<div style=\"margin-top:10px\"><a class=\"btn2\" href=\"/join/" + encodeURIComponent(comp.id) + "\">Participer</a></div>" : "") + "</div></div>";
     const publicKpis =
       "<div class=\"public-kpis\"><div class=\"public-kpi\"><span>Participants</span><b id=\"statParticipants\">" + totals.participants + "</b></div>" +
       "<div class=\"public-kpi\"><span>Points</span><b id=\"statPoints\">" + totals.points + "</b></div>" +
@@ -685,7 +717,7 @@ export default async function handler(req, res) {
     await ensureLegacyMigration();
 
     if (path === "") {
-      return redirect(res, "/admin", 302);
+      return send(res, 200, await publicLandingPage());
     }
 
     if (path === "admin/login") {
