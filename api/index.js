@@ -692,6 +692,17 @@ async function participantStatsPage(session) {
   if(!comp) return participantShell("Compétition introuvable",participantTop(session));
   const data=await getParticipantDetailedStats(comp.id,session.participant_id);
   const s=data.summary||{};
+  const rank=data.rankEvolution||{};
+  const rankDelta=Number(rank.rankDelta||0);
+  const rankTrend=rankDelta>0
+    ? "+"+rankDelta+" place(s) sur la période"
+    : rankDelta<0
+      ? Math.abs(rankDelta)+" place(s) perdue(s) sur la période"
+      : "Position stable ou historique insuffisant";
+  const rankHistory=(rank.history||[]).slice().reverse();
+  const rankHistoryHtml=rankHistory.length
+    ? rankHistory.map(x=>"<tr><td>" + esc(new Date(x.bucket_at).toLocaleString("fr-FR")) + "</td><td>#"+Number(x.rank)+"</td><td>"+Number(x.points||0)+"</td><td>"+Number(x.valid_clicks||0)+"</td></tr>").join("")
+    : "<tr><td colspan=\"4\" class=\"p-muted\">L’évolution apparaîtra après les premiers relevés automatiques.</td></tr>";
 
   const campaignRows=data.campaigns.length?data.campaigns.map(x=>
     "<tr><td><div class=\"person\">" + esc(x.name) + "</div><div class=\"code\">" + esc(x.product||"") + "</div></td><td>" + Number(x.shares||0) + "</td><td>" + Number(x.valid_clicks||0) + "</td><td>" + Number(x.interests||0) + "</td><td>" + Number(x.leads||0) + "</td><td>" + Number(x.sales||0) + "</td><td><b>" + Number(x.points_generated||0) + "</b></td></tr>"
@@ -704,6 +715,7 @@ async function participantStatsPage(session) {
   const body=participantTop(session) +
     "<section class=\"p-hero\"><div class=\"p-kicker\">Mes statistiques</div><h1>" + Number(s.total_points||0) + " points.</h1><p>Performance détaillée de tes liens, campagnes et actions validées.</p></section>" +
     "<div class=\"p-grid\">" +
+      "<div class=\"p-card p-stat p-span4\"><span>Rang actuel</span><b>#" + esc(rank.currentRank||"—") + "</b><div class=\"p-small p-muted\" style=\"margin-top:5px\">" + esc(rankTrend) + "</div></div>" +
       "<div class=\"p-card p-stat p-span4\"><span>Points aujourd’hui</span><b>" + Number(s.points_today||0) + "</b></div>" +
       "<div class=\"p-card p-stat p-span4\"><span>Clics valides</span><b>" + Number(s.valid_clicks||0) + "</b></div>" +
       "<div class=\"p-card p-stat p-span4\"><span>Partages</span><b>" + Number(s.shares||0) + "</b></div>" +
@@ -713,6 +725,7 @@ async function participantStatsPage(session) {
       "<div class=\"p-card p-stat p-span4\"><span>Check-ins</span><b>" + Number(s.checkins||0) + "</b></div>" +
       "<div class=\"p-card p-stat p-span4\"><span>Missions confirmées</span><b>" + Number(s.missions_completed||0) + "</b></div>" +
       "<div class=\"p-card p-stat p-span4\"><span>Personnes distinctes</span><b>" + Number(s.unique_clicks||0) + "</b></div>" +
+      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Évolution du rang</h2><span class=\"p-small p-muted\">Relevés automatiques</span></div><div style=\"overflow:auto\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"text-align:left;padding:8px\">Date</th><th style=\"text-align:left;padding:8px\">Rang</th><th style=\"text-align:left;padding:8px\">Points</th><th style=\"text-align:left;padding:8px\">Clics valides</th></tr></thead><tbody>" + rankHistoryHtml + "</tbody></table></div></div>" +
       "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Performance par campagne</h2></div><div style=\"overflow:auto\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"text-align:left;padding:8px\">Campagne</th><th style=\"text-align:left;padding:8px\">Partages</th><th style=\"text-align:left;padding:8px\">Valides</th><th style=\"text-align:left;padding:8px\">Intérêts</th><th style=\"text-align:left;padding:8px\">Leads</th><th style=\"text-align:left;padding:8px\">Ventes</th><th style=\"text-align:left;padding:8px\">Points</th></tr></thead><tbody>" + campaignRows + "</tbody></table></div></div>" +
       "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Historique des points</h2><span class=\"p-small p-muted\">40 dernières transactions</span></div><div style=\"overflow:auto\"><table style=\"width:100%;border-collapse:collapse\"><thead><tr><th style=\"text-align:left;padding:8px\">Date</th><th style=\"text-align:left;padding:8px\">Type</th><th style=\"text-align:left;padding:8px\">Détail</th><th style=\"text-align:left;padding:8px\">Points</th></tr></thead><tbody>" + historyRows + "</tbody></table></div></div>" +
     "</div>" + participantBottom(session,"home");
