@@ -519,6 +519,52 @@ async function participantRulesPage(session) {
 }
 
 
+async function campaignOfferPage(origin, req, res, competitionId, campaignSlug, referralCode) {
+  const comp = await findCompetition(competitionId);
+  if (!comp) return send(res, 404, "Compétition introuvable", "text/plain; charset=utf-8");
+  const campaign = await getCampaignBySlug(competitionId, campaignSlug);
+  if (!campaign || campaign.status !== "active") {
+    return send(res, 404, "Campagne indisponible", "text/plain; charset=utf-8");
+  }
+  const participant = (await getParticipants(competitionId)).find(p=>p.code===referralCode && p.active!==false);
+  if (!participant) return send(res, 404, "Lien participant inconnu", "text/plain; charset=utf-8");
+
+  const adminSession = await getAdminSession(req).catch(()=>null);
+  const participantSession = await getParticipantSession(req, competitionId).catch(()=>null);
+  await trackReferralVisit({
+    req,
+    res,
+    competitionId,
+    referralCode,
+    campaignId: campaign.id,
+    isAdmin: Boolean(adminSession),
+    isSelf: participantSession?.referral_code === referralCode
+  });
+
+  const body =
+    "<div style=\"max-width:920px;margin:0 auto;padding:18px 12px 60px\">" +
+      "<div class=\"p-top\"><a class=\"p-brand\" href=\"/\"><span class=\"p-mark\">CL</span><span>" + esc(comp.name) + "</span></a></div>" +
+      "<section class=\"p-hero\"><div class=\"p-kicker\">" + esc(campaign.product||"Offre") + "</div><h1>" + esc(campaign.name) + "</h1><p>" + esc(campaign.short_text||campaign.description||"Découvre cette offre.") + "</p></section>" +
+      "<div class=\"p-card\">" +
+        (campaign.image_data ? "<img src=\"" + esc(campaign.image_data) + "\" alt=\"" + esc(campaign.name) + "\" style=\"display:block;width:100%;max-height:620px;object-fit:contain;border-radius:14px;background:#f4f4f1;margin-bottom:16px\">" : "") +
+        "<div class=\"p-title\"><div><h2>" + esc(campaign.name) + "</h2><div class=\"p-small p-muted\">Recommandé par " + esc(participant.name) + "</div></div></div>" +
+        "<p style=\"line-height:1.65\">" + esc(campaign.description||campaign.commercial_text||"") + "</p>" +
+        "<form method=\"post\" action=\"/interest/" + encodeURIComponent(competitionId) + "/" + encodeURIComponent(campaign.slug) + "/" + encodeURIComponent(referralCode) + "\"><button class=\"p-btn\" style=\"width:100%;padding:14px\" type=\"submit\">Je suis intéressé</button></form>" +
+        "<div class=\"p-small p-muted\" style=\"margin-top:10px\">Cette action enregistre uniquement ton intérêt avant d’ouvrir WhatsApp. Elle ne confirme pas automatiquement une vente.</div>" +
+      "</div>" +
+    "</div>";
+  return send(res, 200, participantShell(campaign.name, body));
+}
+
+function whatsappInterestUrl(campaign, referenceCode) {
+  const message = "Bonjour, je suis intéressé par l’offre " + (campaign.product || campaign.name) + ".\\n\\nRéférence : " + referenceCode;
+  const base = String(campaign.whatsapp_url || "").trim();
+  if (base && /wa\\.me|api\\.whatsapp\\.com/i.test(base)) {
+    return base + (base.includes("?") ? "&" : "?") + "text=" + encodeURIComponent(message);
+  }
+  return "https://wa.me/?text=" + encodeURIComponent(message);
+}
+
 async function publicLandingPage() {
   const legacyComps = await getCompetitions();
   const rows = (await Promise.all(legacyComps.map(async (comp) => {
