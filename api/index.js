@@ -462,6 +462,31 @@ function participantLoginPage(message = "") {
   return participantShell("Connexion participant", body);
 }
 
+async function participantCompetitionsPage(session) {
+  const result=await query(
+    \`SELECT c.id,c.name,c.status,c.ends_at,cp.status AS membership_status,
+            cp.total_points_cache,cp.rank_cache,cp.referral_code
+     FROM competition_participants cp
+     JOIN competitions c ON c.id=cp.competition_id
+     WHERE cp.participant_id=$1
+     ORDER BY
+       CASE c.status WHEN 'active' THEN 0 WHEN 'scheduled' THEN 1 WHEN 'paused' THEN 2 ELSE 3 END,
+       cp.joined_at DESC\`,
+    [session.participant_id]
+  );
+
+  const cards=result.rows.length?result.rows.map(row=>
+    "<article class=\"p-card p-span6\"><div class=\"p-title\"><div><div class=\"p-kicker\" style=\"color:#666\">" + esc(String(row.status).toUpperCase()) + "</div><h2 style=\"margin:5px 0 0\">" + esc(row.name) + "</h2></div><span class=\"p-notice\" style=\"padding:6px 9px\">" + Number(row.total_points_cache||0) + " pts</span></div><div class=\"p-small p-muted\">Rang final/actuel : " + (row.rank_cache?"#"+Number(row.rank_cache):"—") + " · " + esc(row.membership_status) + "</div><form method=\"post\" action=\"/participant/switch\" style=\"margin-top:12px\"><input type=\"hidden\" name=\"competitionId\" value=\"" + esc(row.id) + "\"><button class=\"p-btn2\" type=\"submit\">Ouvrir cette compétition</button></form></article>"
+  ).join(""):"<div class=\"p-card p-span12\"><p class=\"p-muted\">Aucune compétition associée à ce compte.</p></div>";
+
+  const body=participantTop(session) +
+    "<section class=\"p-hero\"><div class=\"p-kicker\">Mon compte</div><h1>Mes compétitions.</h1><p>Choisis l’espace participant que tu veux ouvrir.</p></section>" +
+    "<div class=\"p-grid\">" + cards + "</div>" +
+    participantBottom(session,"home");
+
+  return participantShell("Mes compétitions",body);
+}
+
 async function participantPreviewStandalone(origin, comp) {
   const rows=await getRankedParticipants(comp);
   const sample=rows[0]||{name:"Participant",code:"preview",rank:"—",points:0,clicks:0,unique:0,valid:0};
@@ -1638,6 +1663,29 @@ export default async function handler(req, res) {
       return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
     }
 
+    if (path === "participant/switch") {
+      if (req.method !== "POST") return send(res,405,"Méthode non autorisée","text/plain; charset=utf-8");
+      if (!sameOriginRequest(req)) return send(res,403,"Requête refusée","text/plain; charset=utf-8");
+      const current=await getParticipantSession(req);
+      if(!current) return redirect(res,"/participant/login",303);
+      const b=parseBody(req);
+      const competitionId=String(b.competitionId||"");
+      const allowed=await query(
+        `SELECT 1
+         FROM competition_participants cp
+         JOIN competitions c ON c.id=cp.competition_id
+         WHERE cp.participant_id=$1
+           AND cp.competition_id=$2
+           AND cp.status='active'
+           AND c.status IN ('active','scheduled','paused','completed')
+         LIMIT 1`,
+        [current.participant_id,competitionId]
+      );
+      if(!allowed.rowCount) return send(res,403,"Cette compétition n’est pas accessible pour ce compte.","text/plain; charset=utf-8");
+      await createParticipantSession(req,res,current.participant_id,competitionId);
+      return redirect(res,"/me/"+encodeURIComponent(competitionId),303);
+    }
+
     if (path === "participant/logout") {
       if (req.method !== "POST") return send(res, 405, "Méthode non autorisée", "text/plain; charset=utf-8");
       if (!sameOriginRequest(req)) return send(res, 403, "Requête refusée", "text/plain; charset=utf-8");
@@ -1648,7 +1696,7 @@ export default async function handler(req, res) {
     if (path === "me") {
       const session = await getParticipantSession(req);
       if (!session) return redirect(res, "/participant/login", 303);
-      return redirect(res, "/me/" + encodeURIComponent(session.competition_id), 302);
+      return send(res,200,await participantCompetitionsPage(session));
     }
 
     if (path.startsWith("offer/")) {
