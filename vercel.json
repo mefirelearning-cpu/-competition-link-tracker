@@ -107,6 +107,30 @@
     {
       "source": "/api/competition/:id/:action",
       "destination": "/api/index?path=api/competition/:id/:action"
+    },
+    {
+      "source": "/me/:id/:view",
+      "destination": "/api/index?path=me/:id/:view"
+    },
+    {
+      "source": "/offer/:competition/:campaign/:ref",
+      "destination": "/api/index?path=offer/:competition/:campaign/:ref"
+    },
+    {
+      "source": "/interest/:competition/:campaign/:ref",
+      "destination": "/api/index?path=interest/:competition/:campaign/:ref"
+    },
+    {
+      "source": "/api/me/:competition/daily-claim",
+      "destination": "/api/index?path=api/me/:competition/daily-claim"
+    },
+    {
+      "source": "/api/me/:competition/prize-select",
+      "destination": "/api/index?path=api/me/:competition/prize-select"
+    },
+    {
+      "source": "/api/me/:competition/campaign/:campaign/share",
+      "destination": "/api/index?path=api/me/:competition/campaign/:campaign/share"
     }
   ]
 }
