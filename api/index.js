@@ -2543,12 +2543,19 @@ export default async function handler(req, res) {
 
       if (action === "announcement" && req.method === "POST") {
         const b = parseBody(req);
-        await createAnnouncement({
+        const notificationId=await createAnnouncement({
           competitionId:id,
           title:b.title,
           body:b.body,
           kind:b.kind,
           actionUrl:b.actionUrl||null
+        });
+        await logAdminAction({
+          action:"announcement_created",
+          entityType:"notification",
+          entityId:notificationId,
+          description:"Annonce globale publiée",
+          metadata:{competitionId:id,kind:b.kind,title:b.title}
         });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/notifications", 303);
       }
@@ -2563,6 +2570,13 @@ export default async function handler(req, res) {
         participants.push(participant);
         await saveParticipants(id, participants);
         await shadowUpsertParticipant(comp, participant);
+        await logAdminAction({
+          action:"participant_added",
+          entityType:"participant",
+          entityId:code,
+          description:"Participant ajouté manuellement",
+          metadata:{competitionId:id,referralCode:code,name}
+        });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/links?new=" + encodeURIComponent(code), 303);
       }
 
@@ -2581,6 +2595,13 @@ export default async function handler(req, res) {
         }
         await saveParticipants(id, participants);
         await shadowUpsertParticipants(comp, added);
+        await logAdminAction({
+          action:"participants_bulk_added",
+          entityType:"competition",
+          entityId:id,
+          description:"Ajout multiple de participants",
+          metadata:{competitionId:id,count:added.length,codes:added.map(x=>x.code)}
+        });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/links", 303);
       }
 
