@@ -2,6 +2,7 @@ import { createHash, randomBytes } from "node:crypto";
 import { shadowUpsertCompetition, shadowUpsertParticipant, shadowUpsertParticipants, shadowWithdrawParticipant, shadowSyncStats, shadowRecordAdminAdjustment, shadowSyncCompetitionSettings } from "../lib/shadow-store.js";
 import { adminAuthConfigured, verifyAdminCredentials, createAdminSession, getAdminSession, destroyAdminSession, sameOriginRequest, loginNextPath } from "../lib/admin-auth.js";
 import { normalizeWhatsApp, getJoinableCompetition, registerParticipantAccount, createParticipantSession, getParticipantSession, authenticateParticipant, destroyParticipantSession } from "../lib/participant-auth.js";
+import { trackReferralVisit } from "../lib/referral-tracking.js";
 
 const WA_DEFAULT = "https://chat.whatsapp.com/GYyW35sRFnK48pLdCQGMdv?mode=gi_t";
 const PREFIX = "ctl:v2";
@@ -91,6 +92,7 @@ async function getStats(id, code) {
   return {
     clicks: Number(raw.clicks || 0),
     unique: Number(raw.unique || 0),
+    valid: Number(raw.valid || 0),
     points: Number(raw.points || 0)
   };
 }
@@ -106,11 +108,12 @@ async function getRankedParticipants(comp) {
       createdAt: p.createdAt,
       clicks: s.clicks,
       unique: s.unique,
+      valid: s.valid,
       points: s.points,
       link: "/r/" + comp.id + "/" + p.code
     };
   }));
-  rows.sort((a,b) => b.points - a.points || b.unique - a.unique || b.clicks - a.clicks || a.name.localeCompare(b.name));
+  rows.sort((a,b) => b.points - a.points || b.valid - a.valid || b.unique - a.unique || b.clicks - a.clicks || a.name.localeCompare(b.name));
   return rows.map((r,i) => ({...r, rank:i+1}));
 }
 
@@ -672,24 +675,21 @@ async function uniqueParticipantCode(compId, preferred) {
   return code;
 }
 
-async function registerClick(comp, participant, req) {
-  await redis(["HINCRBY", statsKey(comp.id, participant.code), "clicks", 1]);
+async function registerClick(comp, participant, req, res) {
+  const adminSession = await getAdminSession(req).catch(() => null);
+  const participantSession = await getParticipantSession(req, comp.id).catch(() => null);
 
-  const forwarded = String(req.headers["x-forwarded-for"] || "unknown").split(",")[0].trim();
-  const ua = String(req.headers["user-agent"] || "");
-  const secret = storageConfig().token;
-  const fingerprint = createHash("sha256")
-    .update(comp.id + "|" + participant.code + "|" + forwarded + "|" + ua + "|" + secret)
-    .digest("hex");
+  const tracked = await trackReferralVisit({
+    req,
+    res,
+    competitionId: comp.id,
+    referralCode: participant.code,
+    isAdmin: Boolean(adminSession),
+    isSelf: participantSession?.referral_code === participant.code
+  });
 
-  const uniqueKey = PREFIX + ":unique:" + fingerprint;
-  const first = await redis(["SET", uniqueKey, "1", "EX", 7776000, "NX"]);
-  if (first === "OK") {
-    await redis(["HINCRBY", statsKey(comp.id, participant.code), "unique", 1]);
-  }
-
-  const updatedStats = await getStats(comp.id, participant.code);
-  await shadowSyncStats(comp.id, participant.code, updatedStats);
+  await shadowSyncStats(comp.id, participant.code, tracked.stats);
+  return tracked;
 }
 
 async function apiStats(res, comp) {
@@ -700,7 +700,8 @@ async function apiStats(res, comp) {
       participants: participants.length,
       points: participants.reduce((s,r)=>s+r.points,0),
       clicks: participants.reduce((s,r)=>s+r.clicks,0),
-      unique: participants.reduce((s,r)=>s+r.unique,0)
+      unique: participants.reduce((s,r)=>s+r.unique,0),
+      valid: participants.reduce((s,r)=>s+r.valid,0)
     },
     participants
   }), "application/json; charset=utf-8");
@@ -906,7 +907,7 @@ export default async function handler(req, res) {
       if (comp.status === "paused" || comp.status === "ended" || comp.status === "draft") {
         return send(res, 410, "Cette compétition n’accepte actuellement plus de participations.", "text/plain; charset=utf-8");
       }
-      await registerClick(comp, participant, req);
+      await registerClick(comp, participant, req, res);
       return redirect(res, comp.destination || WA_DEFAULT);
     }
 
