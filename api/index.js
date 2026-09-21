@@ -447,12 +447,29 @@ async function participantDashboardPage(origin, session) {
   const valid = row?.valid || 0;
   const link = origin + "/r/" + comp.id + "/" + session.referral_code;
 
-  const [day, conversions, rewards, notifications, config] = await Promise.all([
+  const [day, conversions, rewards, notifications, config, historyResult, todayResult] = await Promise.all([
     getActiveDay(comp.id).catch(()=>null),
     participantConversionStats(comp.id, session.participant_id).catch(()=>({interests:0,leads:0,sales:0})),
     participantRewards(comp.id, session.participant_id).catch(()=>null),
     listParticipantNotifications(comp.id, session.participant_id, 8).catch(()=>[]),
-    getCompetitionConfig(comp.id).catch(()=>null)
+    getCompetitionConfig(comp.id).catch(()=>null),
+    query(
+      `SELECT type,final_points,description,created_at
+       FROM point_transactions
+       WHERE competition_id=$1 AND participant_id=$2
+       ORDER BY created_at DESC
+       LIMIT 12`,
+      [comp.id,session.participant_id]
+    ).catch(()=>({rows:[]})),
+    query(
+      `SELECT COALESCE(SUM(pt.final_points),0)::int AS total
+       FROM point_transactions pt
+       JOIN competitions c ON c.id=pt.competition_id
+       WHERE pt.competition_id=$1
+         AND pt.participant_id=$2
+         AND pt.created_at >= (date_trunc('day',NOW() AT TIME ZONE c.timezone) AT TIME ZONE c.timezone)`,
+      [comp.id,session.participant_id]
+    ).catch(()=>({rows:[{total:0}]}))
   ]);
 
   const missions = day ? await listDayMissions(comp.id, day.id).catch(()=>[]) : [];
@@ -500,17 +517,25 @@ async function participantDashboardPage(origin, session) {
     ? notifications.map(n=>"<div class=\"p-notice\" style=\"margin-top:8px\"><b>" + esc(n.title) + "</b><br>" + esc(n.body) + (n.action_url ? "<br><a href=\"" + esc(n.action_url) + "\" style=\"font-weight:800\">Ouvrir</a>" : "") + "</div>").join("")
     : "<div class=\"p-muted p-small\">Aucune notification récente.</div>";
 
+  const historyHtml = historyResult.rows.length
+    ? historyResult.rows.map(tx =>
+        "<div class=\"p-notice\" style=\"display:flex;justify-content:space-between;gap:12px;align-items:center;margin-top:8px\"><div><b>" + esc(tx.description||tx.type) + "</b><div class=\"p-small p-muted\">" + esc(new Date(tx.created_at).toLocaleString("fr-FR")) + " · " + esc(tx.type) + "</div></div><b>" + (Number(tx.final_points)>=0?"+":"") + Number(tx.final_points) + " pts</b></div>"
+      ).join("")
+    : "<div class=\"p-muted p-small\">Aucun mouvement de points.</div>";
+  const pointsToday = Number(todayResult.rows[0]?.total||0);
+
   const body = participantTop(session) +
     "<section class=\"p-hero\"><div class=\"p-kicker\">Mon espace · " + esc(comp.name) + "</div><h1>" + esc(session.pseudonym) + "</h1><p>Ta compétition en un coup d’œil. Temps restant : " + esc(remainingText) + ".</p></section>" +
     "<div class=\"p-grid\">" +
       "<div class=\"p-card p-span4\"><div class=\"p-stat\"><span>Position</span><div class=\"p-rank\">#" + esc(rank) + "</div></div></div>" +
-      "<div class=\"p-card p-span4 p-stat\"><span>Points</span><b>" + points + "</b></div>" +
+      "<div class=\"p-card p-span4 p-stat\"><span>Points</span><b>" + points + "</b><div class=\"p-small p-muted\">+" + pointsToday + " aujourd’hui</div></div>" +
       "<div class=\"p-card p-span4 p-stat\"><span>Clics valides</span><b>" + valid + "</b></div>" +
       claimHtml + missionHtml +
       "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Ton lien personnel</h2><span class=\"p-small p-muted\">" + unique + " personne(s) distincte(s) · " + clicks + " ouverture(s)</span></div><div class=\"p-link\">" + esc(link) + "</div><div class=\"p-actions\"><button class=\"p-btn copy-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Copier</button><button class=\"p-btn2 share-participant-link\" type=\"button\" data-link=\"" + esc(link) + "\">Partager</button><a class=\"p-btn2\" href=\"/me/" + encodeURIComponent(comp.id) + "/campaigns\">Voir les affiches</a></div></div>" +
       "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Progression</h2></div>" + motivation.map(x=>"<div class=\"p-notice\" style=\"margin-top:8px\">" + esc(x) + "</div>").join("") + "</div>" +
       "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Conversions</h2></div><div class=\"p-grid\"><div class=\"p-stat p-span4\"><span>Intérêts</span><b>" + Number(conversions.interests||0) + "</b></div><div class=\"p-stat p-span4\"><span>Prospects</span><b>" + Number(conversions.leads||0) + "</b></div><div class=\"p-stat p-span4\"><span>Ventes</span><b>" + Number(conversions.sales||0) + "</b></div></div></div>" +
-      "<div class=\"p-card p-span12\"><div class=\"p-title\"><h2>Notifications</h2></div>" + notifHtml + "</div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Historique des points</h2></div>" + historyHtml + "</div>" +
+      "<div class=\"p-card p-span6\"><div class=\"p-title\"><h2>Notifications</h2></div>" + notifHtml + "</div>" +
     "</div>" + participantBottom(session,"home");
 
   const script = "document.addEventListener('click',async e=>{const c=e.target.closest('.copy-participant-link');if(c){try{await navigator.clipboard.writeText(c.dataset.link);c.textContent='Copié ✓'}catch{prompt('Copie ce lien :',c.dataset.link)}return}const s=e.target.closest('.share-participant-link');if(s){if(navigator.share){try{await navigator.share({title:'Mon lien de compétition',url:s.dataset.link})}catch{}}else{try{await navigator.clipboard.writeText(s.dataset.link);alert('Lien copié')}catch{prompt('Copie ce lien :',s.dataset.link)}}}});";
