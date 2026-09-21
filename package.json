@@ -1,1 +1,18 @@
-{"name":"competition-link-tracker","version":"2.0.0","private":true,"scripts":{"dev":"vercel dev","deploy":"vercel --prod"},"engines":{"node":">=20"},"type":"module"}
+{
+  "name": "competition-link-tracker",
+  "version": "2.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "vercel dev",
+    "deploy": "vercel --prod",
+    "db:migrate": "node scripts/migrate.mjs",
+    "db:migrate:legacy": "node scripts/migrate-legacy.mjs"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "type": "module",
+  "dependencies": {
+    "pg": "^8.13.1"
+  }
+}
