@@ -1105,8 +1105,9 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
             "<div><label>Multiplicateur</label><input name=\"multiplier\" type=\"number\" min=\"0\" step=\"0.1\" value=\"" + Number(clickRule.multiplier || 1) + "\"></div>" +
             "<div><label>Plafond quotidien (points)</label><input name=\"dailyCapPoints\" type=\"number\" min=\"0\" value=\"" + (clickRule.daily_cap_points ?? "") + "\" placeholder=\"Vide = sans plafond\"></div>" +
             "<div><label>État</label><select name=\"enabled\"><option value=\"1\"" + (clickRule.enabled ? " selected" : "") + ">Actif</option><option value=\"0\"" + (!clickRule.enabled ? " selected" : "") + ">Désactivé</option></select></div>" +
+            "<div><label>Application</label><select name=\"applyMode\"><option value=\"future\">À partir de maintenant</option><option value=\"recalculate\">Recalculer les anciennes actions</option></select></div>" +
             "<div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer le barème</button></div>" +
-          "</div></form><div class=\"notice\" style=\"margin-top:14px\">Les modifications s’appliquent aux nouvelles actions. Les anciennes transactions du ledger restent inchangées.</div></div>" +
+          "</div></form><div class=\"notice\" style=\"margin-top:14px\">Le recalcul historique demande une confirmation supplémentaire et laisse une trace dans le journal administrateur.</div></div>" +
         "<div class=\"card span6\"><div class=\"section-title\"><div><h2>Nouveau bonus burst</h2><div class=\"subnav-note\">Récompense une activité réelle concentrée dans une fenêtre courte.</div></div></div>" +
           "<form method=\"post\" action=\"/api/competition/" + id + "/burst-add\"><div class=\"form-grid\">" +
             "<div class=\"full\"><label>Nom</label><input name=\"name\" maxlength=\"80\" placeholder=\"Ex. Boost 10 visiteurs\" required></div>" +
@@ -2015,6 +2016,17 @@ export default async function handler(req, res) {
 
       if (action === "scoring-rule" && req.method === "POST") {
         const b = parseBody(req);
+        const applyMode = String(b.applyMode || "future");
+        if (applyMode === "recalculate" && String(b.confirmRecalculate || "") !== "1") {
+          return send(res,409,pageShell(
+            "Confirmer le recalcul",
+            topNav() +
+            "<div class=\"card\" style=\"max-width:720px;margin:40px auto\"><h2>Recalculer les anciens clics valides ?</h2><p class=\"muted\">Les transactions historiques sans campagne seront recalculées avec le nouveau barème et le plafond quotidien. L’opération sera journalisée.</p><form method=\"post\" action=\"/api/competition/" + encodeURIComponent(id) + "/scoring-rule\">" +
+            hiddenInputsFromBody(b,["enabled","basePoints","multiplier","dailyCapPoints","applyMode"]) +
+            "<input type=\"hidden\" name=\"confirmRecalculate\" value=\"1\"><div class=\"actions\"><a class=\"btn2\" href=\"/c/" + encodeURIComponent(id) + "/scoring\">Annuler</a><button class=\"danger\" type=\"submit\">Confirmer le recalcul</button></div></form></div>"
+          ));
+        }
+
         await updateValidClickRule({
           competitionId: id,
           enabled: String(b.enabled || "") === "1",
@@ -2023,6 +2035,20 @@ export default async function handler(req, res) {
           dailyCapPoints: b.dailyCapPoints,
           adminId: "admin"
         });
+
+        if (applyMode === "recalculate") {
+          await recalculatePointTransactions({
+            competitionId:id,
+            type:"valid_click",
+            campaignId:null,
+            basePoints:b.basePoints,
+            multiplier:b.multiplier,
+            dailyCapPoints:b.dailyCapPoints,
+            adminId:"admin"
+          });
+          await syncAllRedisPointCaches(id);
+        }
+
         return redirect(res, "/c/" + encodeURIComponent(id) + "/scoring", 303);
       }
 
