@@ -1072,7 +1072,7 @@ async function adminDaysContent(comp) {
     "</article>"
   ).join("") : "<div class=\"card span12 empty\">Aucune journée configurée.</div>";
 
-  const streakRows=streaks.length?streaks.map(s=>"<tr><td>" + Number(s.consecutive_days) + " jours</td><td class=\"points-col\">+" + Number(s.bonus_points) + "</td><td>" + (s.enabled?"Actif":"Inactif") + "</td></tr>").join(""):"<tr><td colspan=\"3\" class=\"empty\">Aucun bonus de série.</td></tr>";
+  const streakRows=streaks.length?streaks.map(s=>"<tr><td>" + Number(s.consecutive_days) + " jours</td><td class=\"points-col\">+" + Number(s.bonus_points) + "</td><td>" + (s.enabled?"Actif":"Inactif") + "</td><td><div class=\"actions\"><form method=\"post\" action=\"/api/competition/" + id + "/streak-toggle\"><input type=\"hidden\" name=\"ruleId\" value=\"" + esc(s.id) + "\"><input type=\"hidden\" name=\"enabled\" value=\"" + (s.enabled?"0":"1") + "\"><button class=\"btn2\" type=\"submit\">" + (s.enabled?"Désactiver":"Activer") + "</button></form><form method=\"post\" action=\"/api/competition/" + id + "/streak-delete\"><input type=\"hidden\" name=\"ruleId\" value=\"" + esc(s.id) + "\"><button class=\"danger\" type=\"submit\">Supprimer</button></form></div></td></tr>").join(""):"<tr><td colspan=\"4\" class=\"empty\">Aucun bonus de série.</td></tr>";
 
   return pageTitleHtml("Journées & événements","Durée libre, journées programmées, missions, check-ins et bonus de série.") +
     "<div class=\"grid\" style=\"margin-bottom:14px\">" +
@@ -1080,7 +1080,7 @@ async function adminDaysContent(comp) {
       "<div class=\"card span8\"><div class=\"section-title\"><h2>Créer / modifier une journée</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/day-save\"><div class=\"form-grid\"><div><label>N° jour</label><input name=\"dayNumber\" type=\"number\" min=\"1\" required></div><div><label>Titre</label><input name=\"title\" required placeholder=\"GEMINI TAKEOVER\"></div><div><label>Récompense quotidienne</label><input name=\"rewardDailyPoints\" type=\"number\" value=\"0\"></div><div><label>Statut</label><select name=\"status\"><option value=\"draft\">Brouillon</option><option value=\"scheduled\">Programmé</option><option value=\"active\">Actif</option><option value=\"finished\">Terminé</option></select></div><div><label>Début</label><input class=\"config-datetime\" name=\"startsAt\" type=\"datetime-local\"></div><div><label>Fin</label><input class=\"config-datetime\" name=\"endsAt\" type=\"datetime-local\"></div><div class=\"full\"><label>Campagne vedette</label><select name=\"featuredCampaignId\">" + campaignOptions + "</select></div><div class=\"full\"><label>Description</label><textarea name=\"description\"></textarea></div><div class=\"full\"><label>Message marketing</label><textarea name=\"marketingMessage\"></textarea></div><div class=\"full\"><label>Notification du jour</label><input name=\"notificationText\"></div><div class=\"full\"><button class=\"btn\" type=\"submit\">Enregistrer la journée</button></div></div></form></div>" +
     "</div>" +
     "<div class=\"grid\">" + dayCards + "</div>" +
-    "<div class=\"grid\" style=\"margin-top:14px\"><div class=\"card span5\"><div class=\"section-title\"><h2>Bonus de série</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/streak-add\"><div class=\"form-grid\"><div><label>Jours consécutifs</label><input name=\"consecutiveDays\" type=\"number\" min=\"2\" required></div><div><label>Bonus points</label><input name=\"bonusPoints\" type=\"number\" required></div><div class=\"full\"><button class=\"btn2\" type=\"submit\">Ajouter / modifier</button></div></div></form><div class=\"table-wrap\" style=\"margin-top:12px\"><table><thead><tr><th>Série</th><th>Bonus</th><th>État</th></tr></thead><tbody>" + streakRows + "</tbody></table></div></div>" +
+    "<div class=\"grid\" style=\"margin-top:14px\"><div class=\"card span5\"><div class=\"section-title\"><h2>Bonus de série</h2></div><form method=\"post\" action=\"/api/competition/" + id + "/streak-add\"><div class=\"form-grid\"><div><label>Jours consécutifs</label><input name=\"consecutiveDays\" type=\"number\" min=\"2\" required></div><div><label>Bonus points</label><input name=\"bonusPoints\" type=\"number\" required></div><div class=\"full\"><button class=\"btn2\" type=\"submit\">Ajouter / modifier</button></div></div></form><div class=\"table-wrap\" style=\"margin-top:12px\"><table><thead><tr><th>Série</th><th>Bonus</th><th>État</th><th>Action</th></tr></thead><tbody>" + streakRows + "</tbody></table></div></div>" +
       "<div class=\"card span7\"><div class=\"section-title\"><h2>Validations de missions</h2><span class=\"small muted\">" + completions.filter(x=>x.status==="pending").length + " en attente</span></div><div class=\"table-wrap\"><table><thead><tr><th>Participant</th><th>Mission</th><th>Statut</th><th>Points</th><th>Action</th></tr></thead><tbody>" +
         (completions.length ? completions.map(x=>"<tr><td>" + esc(x.pseudonym) + "<div class=\"code\">" + esc(x.referral_code||"") + "</div></td><td>" + esc(x.mission_title) + "</td><td>" + esc(x.status) + "</td><td>" + Number(x.points_fixed||0) + "</td><td>" + (x.status==="pending" ? "<form method=\"post\" action=\"/api/competition/" + id + "/mission-review\" class=\"actions\"><input type=\"hidden\" name=\"completionId\" value=\"" + esc(x.id) + "\"><button class=\"btn2\" name=\"action\" value=\"confirmed\" type=\"submit\">Confirmer</button><button class=\"danger\" name=\"action\" value=\"rejected\" type=\"submit\">Rejeter</button></form>" : "—") + "</td></tr>").join("") : "<tr><td colspan=\"5\" class=\"empty\">Aucune soumission.</td></tr>") +
       "</tbody></table></div></div></div>";
@@ -2152,6 +2152,27 @@ export default async function handler(req, res) {
           metadata:{competitionId:id,consecutiveDays:b.consecutiveDays,bonusPoints:b.bonusPoints}
         });
         return redirect(res, "/c/" + encodeURIComponent(id) + "/days", 303);
+      }
+
+      if (action === "streak-toggle" && req.method === "POST") {
+        const b=parseBody(req);
+        await setStreakRuleEnabled({
+          competitionId:id,
+          ruleId:String(b.ruleId||""),
+          enabled:String(b.enabled||"")==="1",
+          adminId:"admin"
+        });
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/days",303);
+      }
+
+      if (action === "streak-delete" && req.method === "POST") {
+        const b=parseBody(req);
+        await deleteStreakRule({
+          competitionId:id,
+          ruleId:String(b.ruleId||""),
+          adminId:"admin"
+        });
+        return redirect(res,"/c/"+encodeURIComponent(id)+"/days",303);
       }
 
       if (action === "day-duplicate" && req.method === "POST") {
