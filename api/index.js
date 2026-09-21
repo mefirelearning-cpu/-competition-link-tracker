@@ -1360,14 +1360,41 @@ async function competitionPage(origin, comp, view = "overview", publicMode = fal
         "<div class=\"capture-note\">Une même personne ne compte qu’une fois comme visiteur distinct. Les rechargements, auto-tests et trafics automatisés ne deviennent pas des clics valides.</div></div>" +
       "<div class=\"public-side\"><div class=\"public-panel\"><h3>Podium</h3>" + podiumHtml(rows) + "</div><div class=\"public-panel\"><div class=\"section-title\"><h2>Écart de points</h2></div><div class=\"chart\" id=\"liveChart\">" + chartHtml(rows) + "</div></div></div></div>";
   } else if (view === "overview") {
+    const [overviewAnalytics,overviewDay,overviewDays,overviewConfig]=await Promise.all([
+      getCompetitionAnalytics(comp.id),
+      getActiveDay(comp.id).catch(()=>null),
+      listCompetitionDays(comp.id).catch(()=>[]),
+      getCompetitionConfig(comp.id).catch(()=>null)
+    ]);
+    const os=overviewAnalytics.summary||{};
+    const endMs=overviewConfig?.ends_at?new Date(overviewConfig.ends_at).getTime():null;
+    const remainingMs=endMs===null?null:Math.max(0,endMs-Date.now());
+    const remaining=remainingMs===null
+      ? "Non défini"
+      : Math.floor(remainingMs/86400000)+"j "+Math.floor((remainingMs%86400000)/3600000)+"h "+Math.floor((remainingMs%3600000)/60000)+"min";
+    const dayLabel=overviewDay
+      ? String(overviewDay.day_number)+" / "+Math.max(overviewDays.length,Number(overviewDay.day_number))
+      : "— / "+overviewDays.length;
+
     const quick =
       "<div class=\"quick-actions\">" +
-        "<a class=\"quick-card\" href=\"/c/" + id + "/links\"><b>Liens participants</b><span>Copier et partager les liens personnels.</span></a>" +
-        "<a class=\"quick-card\" href=\"/c/" + id + "/ranking\"><b>Classement</b><span>Voir le classement complet du premier au dernier.</span></a>" +
-        "<a class=\"quick-card\" href=\"/c/" + id + "/live\"><b>Graphique live</b><span>Suivre la position des participants.</span></a>" +
-        "<a class=\"quick-card\" href=\"/c/" + id + "/participants\"><b>Participants</b><span>Ajouter, gérer ou supprimer des participants.</span></a>" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/campaigns\"><b>Affiches & campagnes</b><span>Publier et piloter les campagnes traçables.</span></a>" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/days\"><b>Journées & événements</b><span>Programmer les missions et récompenses.</span></a>" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/prospects\"><b>Prospects & ventes</b><span>Valider les conversions réelles.</span></a>" +
+        "<a class=\"quick-card\" href=\"/c/" + id + "/participants\"><b>Participants</b><span>Gérer les comptes, statuts et ajustements.</span></a>" +
       "</div>";
-    content = hero + statsHtml +
+
+    const controlMetrics=
+      "<div class=\"metric-grid\">" +
+        "<div class=\"card stat\"><div class=\"label\">Jour</div><div class=\"num\">" + esc(dayLabel) + "</div></div>" +
+        "<div class=\"card stat\"><div class=\"label\">Temps restant</div><div class=\"num\" style=\"font-size:20px\">" + esc(remaining) + "</div></div>" +
+        "<div class=\"card stat\"><div class=\"label\">Actifs 24 h</div><div class=\"num\">" + Number(os.active_24h||0) + "</div></div>" +
+        "<div class=\"card stat\"><div class=\"label\">Prospects</div><div class=\"num\">" + Number(os.leads||0) + "</div></div>" +
+        "<div class=\"card stat\"><div class=\"label\">Ventes</div><div class=\"num\">" + Number(os.sales||0) + "</div></div>" +
+        "<div class=\"card stat\"><div class=\"label\">Revenu attribué</div><div class=\"num\" style=\"font-size:20px\">" + Number(os.attributed_revenue||0) + " XAF</div></div>" +
+      "</div>";
+
+    content = hero + controlMetrics + statsHtml +
       "<div class=\"overview-grid\">" +
         "<div class=\"card content-card\"><div class=\"section-title\"><div><h2>Podium actuel</h2><div class=\"subnav-note\">Vue rapide des meilleurs participants.</div></div><a class=\"btn2\" href=\"/c/" + id + "/ranking\">Voir tout</a></div>" + podiumHtml(rows) + "</div>" +
         "<div class=\"card content-card\"><div class=\"section-title\"><h2>Accès rapides</h2></div>" + quick + "</div>" +
