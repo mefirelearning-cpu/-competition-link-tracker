@@ -135,6 +135,10 @@
     {
       "source": "/api/me/:competition/mission-submit",
       "destination": "/api/index?path=api/me/:competition/mission-submit"
+    },
+    {
+      "source": "/preview/:id",
+      "destination": "/api/index?path=preview/:id"
     }
   ]
 }
