@@ -694,12 +694,16 @@ async function participantStatsPage(session) {
   const data=await getParticipantDetailedStats(comp.id,session.participant_id);
   const s=data.summary||{};
   const rank=data.rankEvolution||{};
-  const rankDelta=Number(rank.rankDelta||0);
-  const rankTrend=rankDelta>0
-    ? "+"+rankDelta+" place(s) sur la période"
-    : rankDelta<0
-      ? Math.abs(rankDelta)+" place(s) perdue(s) sur la période"
-      : "Position stable ou historique insuffisant";
+  const hasRankComparison=rank.currentRank!==null && rank.currentRank!==undefined &&
+    rank.previousRank!==null && rank.previousRank!==undefined;
+  const rankDelta=hasRankComparison ? Number(rank.rankDelta||0) : null;
+  const rankTrend=!hasRankComparison
+    ? "Évolution disponible après au moins deux relevés."
+    : rankDelta>0
+      ? "Tu as gagné "+rankDelta+" "+(rankDelta===1?"place":"places")
+      : rankDelta<0
+        ? "Tu as perdu "+Math.abs(rankDelta)+" "+(Math.abs(rankDelta)===1?"place":"places")
+        : "Position stable";
   const rankHistory=(rank.history||[]).slice().reverse();
   const rankHistoryHtml=rankHistory.length
     ? rankHistory.map(x=>"<tr><td>" + esc(new Date(x.bucket_at).toLocaleString("fr-FR")) + "</td><td>#"+Number(x.rank)+"</td><td>"+Number(x.points||0)+"</td><td>"+Number(x.valid_clicks||0)+"</td></tr>").join("")
