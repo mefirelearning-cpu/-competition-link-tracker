@@ -38,5 +38,5 @@
     {"source":"/participant/switch","destination":"/api/index?path=participant/switch"},
     {"source":"/api/cron/lifecycle","destination":"/api/index?path=api/cron/lifecycle"}
   ],
-  "crons":[{"path":"/api/cron/lifecycle","schedule":"*/5 * * * *"}]
+  "crons":[{"path":"/api/cron/lifecycle","schedule":"0 0 * * *"}]
 }
