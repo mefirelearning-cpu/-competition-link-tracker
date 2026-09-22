@@ -1670,9 +1670,10 @@ export default async function handler(req, res) {
       if (req.method !== "GET") return send(res,405,"Méthode non autorisée","text/plain; charset=utf-8");
       const authHeader=String(req.headers.authorization||"");
       const cronSecret=String(process.env.CRON_SECRET||"");
-      const scheduleHeader=String(req.headers["x-vercel-cron-schedule"]||"");
-      const authorized=(cronSecret && authHeader === "Bearer " + cronSecret) || scheduleHeader === "*/5 * * * *";
-      if (!authorized) return send(res,401,"Non autorisé","text/plain; charset=utf-8");
+      if (!cronSecret) return send(res,503,"Cron non configuré","text/plain; charset=utf-8");
+      if (authHeader !== "Bearer " + cronSecret) {
+        return send(res,401,"Non autorisé","text/plain; charset=utf-8");
+      }
       const result=await runLifecycleSweep();
       return send(res,200,JSON.stringify(result),"application/json; charset=utf-8");
     }
