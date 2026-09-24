@@ -1,0 +1,1 @@
+Admin surface intentionally contains only competition selection, participant creation, link copy/test, click counters, manual points and public leaderboard access.
