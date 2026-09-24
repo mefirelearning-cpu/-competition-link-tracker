@@ -1,0 +1,36 @@
+import { getParticipantSession } from "../lib/participant-auth.js";
+import { listCampaigns } from "../lib/marketing.js";
+import { query } from "../lib/db.js";
+
+function esc(v){return String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
+function send(res,status,body,type="text/html; charset=utf-8"){res.statusCode=status;res.setHeader("Content-Type",type);res.setHeader("Cache-Control","no-store");res.end(body);}
+function redirect(res,location){res.statusCode=302;res.setHeader("Location",location);res.end();}
+
+function shell(title,body,script=""){
+  return `<!doctype html><html lang="fr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#111111"><title>${esc(title)}</title><style>
+  :root{--bg:#f5f5f2;--card:#fff;--text:#101010;--muted:#6d6d6d;--line:#deded8}*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}a{text-decoration:none;color:inherit}.wrap{width:min(920px,calc(100% - 22px));margin:auto;padding:16px 0 92px}.top{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:14px}.brand{font-weight:900;letter-spacing:-.02em}.back{border:1px solid var(--line);background:#fff;border-radius:10px;padding:9px 12px;font-size:12px;font-weight:800}.hero{background:#111;color:#fff;border-radius:20px;padding:22px;margin-bottom:14px}.hero small{color:#aaa;font-weight:850;text-transform:uppercase;letter-spacing:.1em}.hero h1{font-size:clamp(30px,7vw,48px);line-height:1;margin:8px 0;letter-spacing:-.05em}.hero p{margin:0;color:#c8c8c8;line-height:1.5}.list{display:grid;gap:14px}.card{background:#fff;border:1px solid var(--line);border-radius:18px;padding:16px}.poster{display:block;width:100%;max-height:560px;object-fit:contain;background:#f1f1ee;border-radius:13px;margin-bottom:14px}.tag{font-size:10px;text-transform:uppercase;letter-spacing:.09em;color:var(--muted);font-weight:900}.card h2{font-size:24px;letter-spacing:-.035em;margin:5px 0 8px}.desc{white-space:pre-wrap;line-height:1.55;color:#444;margin:0 0 14px}.share{width:100%;border:0;background:#111;color:#fff;border-radius:13px;padding:15px;font:inherit;font-weight:900;cursor:pointer;font-size:15px}.share:disabled{opacity:.6}.hint{text-align:center;color:var(--muted);font-size:11px;margin-top:9px;line-height:1.45}.empty{background:#fff;border:1px solid var(--line);border-radius:18px;padding:28px;text-align:center;color:var(--muted)}.bottom{position:fixed;left:9px;right:9px;bottom:9px;display:grid;grid-template-columns:repeat(3,1fr);background:#111;color:#fff;border-radius:16px;padding:6px;z-index:20}.bottom a{padding:10px 6px;text-align:center;font-size:11px;font-weight:800;border-radius:10px}.bottom a.active{background:#fff;color:#111}@media(min-width:761px){.bottom{position:static;margin-top:18px;width:max-content;margin-left:auto;margin-right:auto;display:flex}.bottom a{padding:10px 18px}}
+  </style></head><body><main class="wrap">${body}</main>${script?`<script>${script}</script>`:""}</body></html>`;
+}
+
+export default async function handler(req,res){
+  try{
+    if(req.method!=="GET") return send(res,405,"Méthode non autorisée","text/plain; charset=utf-8");
+    const competitionId=String(req.query?.competition||"");
+    const session=await getParticipantSession(req,competitionId);
+    if(!session) return redirect(res,"/participant/login");
+    const compResult=await query("SELECT id,name,status FROM competitions WHERE id=$1 LIMIT 1",[competitionId]);
+    const comp=compResult.rows[0];
+    if(!comp) return send(res,404,"Compétition introuvable","text/plain; charset=utf-8");
+    const campaigns=await listCampaigns(competitionId);
+    const origin="https://"+req.headers.host;
+    const cards=campaigns.length?campaigns.map(c=>{
+      const offer=origin+"/offer/"+encodeURIComponent(competitionId)+"/"+encodeURIComponent(c.slug)+"/"+encodeURIComponent(session.referral_code);
+      const description=String(c.commercial_text||c.short_text||c.description||c.name||"").trim();
+      const shareText=(description?description+"\n\n":"")+offer;
+      return `<article class="card"><div class="tag">${esc(c.product||"Offre")}${c.featured?" · À partager":""}</div><h2>${esc(c.name)}</h2>${c.image_data?`<img class="poster" src="${esc(c.image_data)}" alt="${esc(c.name)}">`:""}<p class="desc">${esc(description)}</p><button class="share" type="button" data-campaign="${esc(c.id)}" data-title="${esc(c.name)}" data-text="${esc(shareText)}" data-link="${esc(offer)}" data-image="${esc(c.image_data||"")}">Partager cette affiche</button><div class="hint">Ton lien personnel est ajouté automatiquement. Tu n’as rien à copier.</div></article>`;
+    }).join(""):"<div class=\"empty\">Aucune affiche active pour le moment.</div>";
+    const body=`<div class="top"><a class="brand" href="/me/${encodeURIComponent(competitionId)}">Competition Link Tracker</a><a class="back" href="/me/${encodeURIComponent(competitionId)}">Accueil</a></div><section class="hero"><small>Mes affiches</small><h1>Une affiche. Un bouton.</h1><p>Choisis l’offre à promouvoir puis appuie sur Partager. La description et ton lien personnel sont préparés automatiquement.</p></section><section class="list">${cards}</section><nav class="bottom"><a href="/me/${encodeURIComponent(competitionId)}">Accueil</a><a class="active" href="/me/${encodeURIComponent(competitionId)}/campaigns">Partager</a><a href="/leaderboard/${encodeURIComponent(competitionId)}">Classement</a></nav>`;
+    const script=`async function mark(c){try{await fetch('/api/me/${encodeURIComponent(competitionId)}/campaign/'+encodeURIComponent(c)+'/share',{method:'POST',headers:{'Content-Type':'application/x-www-form-urlencoded'},body:'channel=native'})}catch{}}async function imageFile(data,title){if(!data)return null;try{const b=await fetch(data).then(r=>r.blob());const ext=(b.type.split('/')[1]||'jpg').replace('jpeg','jpg');return new File([b],(title||'affiche').replace(/[^a-z0-9_-]+/gi,'-')+'.'+ext,{type:b.type})}catch{return null}}document.addEventListener('click',async e=>{const b=e.target.closest('.share');if(!b)return;b.disabled=true;const old=b.textContent;b.textContent='Préparation…';try{const file=await imageFile(b.dataset.image,b.dataset.title);const payload={title:b.dataset.title,text:b.dataset.text};if(file&&navigator.canShare&&navigator.canShare({files:[file]}))payload.files=[file];if(navigator.share){try{await navigator.share(payload);await mark(b.dataset.campaign);b.textContent='Partagé ✓';setTimeout(()=>{b.textContent=old;b.disabled=false},1300);return}catch(err){if(err&&err.name==='AbortError'){b.textContent=old;b.disabled=false;return}}}await navigator.clipboard.writeText(b.dataset.text);await mark(b.dataset.campaign);b.textContent='Texte + lien copiés ✓';setTimeout(()=>{b.textContent=old;b.disabled=false},1500)}catch{prompt('Partage ce message :',b.dataset.text);b.textContent=old;b.disabled=false}});`;
+    return send(res,200,shell("Partager — "+comp.name,body,script));
+  }catch(error){console.error("participant-campaigns:",error);return send(res,500,"Erreur interne","text/plain; charset=utf-8");}
+}
