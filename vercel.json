@@ -1,6 +1,6 @@
 {
   "rewrites": [
-    {"source":"/","destination":"/api/index"},
+    {"source":"/","destination":"/api/simple-root"},
     {"source":"/admin","destination":"/api/simple-home"},
     {"source":"/admin/logout","destination":"/api/index?path=admin/logout"},
     {"source":"/admin/login","destination":"/api/index?path=admin/login"},
