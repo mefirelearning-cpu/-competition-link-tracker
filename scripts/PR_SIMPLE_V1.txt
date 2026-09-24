@@ -1,0 +1,1 @@
+PR scope finalized: launch-only surface, preserving existing database and referral tracking implementation.
