@@ -1,0 +1,8 @@
+Simple V1 candidate
+- mobile-first admin competition selector
+- focused competition admin
+- dedicated participant creation endpoint
+- dedicated manual points endpoint
+- existing referral click route retained
+- focused public leaderboard with competition, prizes, rank and gap to next place
+- root redirects to admin
