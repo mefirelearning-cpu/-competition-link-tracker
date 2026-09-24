@@ -1,0 +1,5 @@
+simple-launch-v1
+mobile-first admin
+manual participant links
+manual points
+public leaderboard
