@@ -1,0 +1,1 @@
+Admin points adjustments accept positive or negative integer amounts and require a reason.
