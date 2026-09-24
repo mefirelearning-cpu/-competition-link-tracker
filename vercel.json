@@ -1,7 +1,7 @@
 {
   "rewrites": [
     {"source":"/","destination":"/api/index"},
-    {"source":"/admin","destination":"/api/index?path=admin"},
+    {"source":"/admin","destination":"/api/simple-home"},
     {"source":"/admin/logout","destination":"/api/index?path=admin/logout"},
     {"source":"/admin/login","destination":"/api/index?path=admin/login"},
     {"source":"/c/:id","destination":"/api/simple-admin?path=c/:id"},
