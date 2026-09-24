@@ -1,0 +1,1 @@
+Existing database tables and historical data are preserved. Simplification is at the launch UI/routing layer.
