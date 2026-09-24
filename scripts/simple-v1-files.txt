@@ -1,0 +1,6 @@
+api/simple-root.js
+api/simple-home.js
+api/simple-admin.js
+api/simple-actions.js
+api/simple-leaderboard.js
+vercel.json
