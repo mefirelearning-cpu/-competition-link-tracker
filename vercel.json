@@ -9,6 +9,8 @@
     {"source":"/leaderboard/:id","destination":"/api/index?path=leaderboard/:id"},
     {"source":"/r/:id/:code","destination":"/api/index?path=r/:id/:code"},
     {"source":"/r/:code","destination":"/api/index?path=r/:code"},
+    {"source":"/api/simple/competition/:id/add","destination":"/api/simple-actions?path=api/simple/competition/:id/add"},
+    {"source":"/api/simple/competition/:id/points","destination":"/api/simple-actions?path=api/simple/competition/:id/points"},
     {"source":"/api/competition/create","destination":"/api/index?path=api/competition/create"},
     {"source":"/api/competition/:id/stats","destination":"/api/index?path=api/competition/:id/stats"},
     {"source":"/api/competition/:id/add","destination":"/api/index?path=api/competition/:id/add"},
