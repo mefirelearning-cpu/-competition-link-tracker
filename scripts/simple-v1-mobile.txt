@@ -1,0 +1,1 @@
+Primary target: iPhone/mobile. Desktop remains responsive.
