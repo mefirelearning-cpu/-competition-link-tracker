@@ -1,0 +1,2 @@
+Deployment candidate branch: codex/simple-launch-v1
+After checks pass, merge the pull request into main. Vercel connected to main should deploy automatically.
