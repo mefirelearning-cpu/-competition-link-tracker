@@ -6,7 +6,7 @@
     {"source":"/admin/login","destination":"/api/index?path=admin/login"},
     {"source":"/c/:id","destination":"/api/simple-admin?path=c/:id"},
     {"source":"/c/:id/:view","destination":"/api/simple-admin?path=c/:id/:view"},
-    {"source":"/leaderboard/:id","destination":"/api/index?path=leaderboard/:id"},
+    {"source":"/leaderboard/:id","destination":"/api/simple-leaderboard?path=leaderboard/:id"},
     {"source":"/r/:id/:code","destination":"/api/index?path=r/:id/:code"},
     {"source":"/r/:code","destination":"/api/index?path=r/:code"},
     {"source":"/api/simple/competition/:id/add","destination":"/api/simple-actions?path=api/simple/competition/:id/add"},
