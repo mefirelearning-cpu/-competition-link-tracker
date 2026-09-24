@@ -1,0 +1,1 @@
+Referral route /r/:id/:code remains on the existing tracking implementation for compatibility with participant links.
