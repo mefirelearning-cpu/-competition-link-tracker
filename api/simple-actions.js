@@ -1,4 +1,5 @@
 import { randomBytes } from "node:crypto";
+import { put } from "@vercel/blob";
 import { query } from "../lib/db.js";
 import { adminAuthConfigured, getAdminSession } from "../lib/admin-auth.js";
 const go=(res,url)=>{res.statusCode=303;res.setHeader("Location",url);res.end();};
@@ -9,20 +10,22 @@ const slugify=v=>clean(v).toLowerCase().normalize("NFD").replace(/[\u0300-\u036f
 const validUrl=v=>{try{const u=new URL(clean(v));return (u.protocol==="https:"||u.protocol==="http:")?u.toString():"";}catch{return "";}};
 async function authorized(req){return !adminAuthConfigured() || Boolean(await getAdminSession(req));}
 async function addParticipant(competitionId,name,referral){const participantId=id("p"),membershipId=id("cp");await query(`INSERT INTO participants (id,pseudonym,status) VALUES ($1,$2,'active')`,[participantId,name]);await query(`INSERT INTO competition_participants (id,competition_id,participant_id,referral_code,status) VALUES ($1,$2,$3,$4,'active')`,[membershipId,competitionId,participantId,referral]);}
+async function parseCreateRequest(req){const type=String(req.headers["content-type"]||"");if(!type.includes("multipart/form-data"))return {fields:req.body||{},file:null};const request=new Request("https://local.invalid",{method:"POST",headers:{"content-type":type},body:req,duplex:"half"});const form=await request.formData();return {fields:Object.fromEntries([...form.entries()].filter(([,v])=>typeof v==="string")),file:form.get("cover")};}
 export default async function handler(req,res){
  const raw=String(req.query?.path||"");
  if(req.method!=="POST"){res.statusCode=405;res.setHeader("Allow","POST");return res.end("Method not allowed");}
  if(!(await authorized(req))){res.statusCode=401;return res.end("Unauthorized");}
  if(raw==="api/simple/competition/create"){
   try{
-   const name=clean(req.body?.name).slice(0,100),destination=validUrl(req.body?.destination),coverRaw=clean(req.body?.cover),cover=coverRaw?validUrl(coverRaw):"",prizes=clean(req.body?.prizes).slice(0,500);
+   const {fields,file}=await parseCreateRequest(req),name=clean(fields.name).slice(0,100),destination=validUrl(fields.destination),prizes=clean(fields.prizes).slice(0,500);
    if(!name)return go(res,"/admin?error="+encodeURIComponent("Nom de compétition requis"));
    if(!destination)return go(res,"/admin?error="+encodeURIComponent("Lien principal valide requis (https://...)"));
-   if(coverRaw&&!cover)return go(res,"/admin?error="+encodeURIComponent("URL de photo invalide"));
+   let cover="";
+   if(file&&typeof file!=="string"&&Number(file.size||0)>0){if(!["image/jpeg","image/png","image/webp"].includes(file.type))return go(res,"/admin?error="+encodeURIComponent("Photo invalide : JPG, PNG ou WebP uniquement"));if(file.size>8*1024*1024)return go(res,"/admin?error="+encodeURIComponent("Photo trop lourde (8 Mo maximum)"));const ext=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";const blob=await put(`competitions/${Date.now()}-${randomBytes(5).toString("hex")}.${ext}`,file,{access:"public",addRandomSuffix:false});cover=blob.url;}
    const competitionId=id("cmp");let slug=(slugify(name)||"competition")+"-"+randomBytes(3).toString("hex");
    await query(`INSERT INTO competitions (id,slug,name,cover_url,status,registrations_open,leaderboard_visible,settings) VALUES ($1,$2,$3,$4,'active',true,true,$5::jsonb)`,[competitionId,slug,name,cover||null,JSON.stringify({redirectUrl:destination,prizes:prizes||"Lots annoncés par l’organisateur"})]);
    return go(res,"/c/"+encodeURIComponent(competitionId)+"?createdCompetition=1");
-  }catch(e){console.error("create competition:",e);return go(res,"/admin?error="+encodeURIComponent("Création impossible"));}
+  }catch(e){console.error("create competition:",e);const msg=String(e?.message||"").includes("BLOB")?"Stockage photo non configuré sur Vercel":"Création impossible";return go(res,"/admin?error="+encodeURIComponent(msg));}
  }
  const m=raw.match(/^api\/simple\/competition\/([^/]+)\/(add|bulk|points|destination)$/);if(!m){res.statusCode=404;return res.end("Not found");}
  const competitionId=decodeURIComponent(m[1]),action=m[2],back="/c/"+encodeURIComponent(competitionId);
