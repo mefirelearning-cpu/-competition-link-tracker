@@ -11,6 +11,7 @@
     {"source":"/api/simple/competition/:id/add","destination":"/api/simple-actions?path=api/simple/competition/:id/add"},
     {"source":"/api/simple/competition/:id/bulk","destination":"/api/simple-actions?path=api/simple/competition/:id/bulk"},
     {"source":"/api/simple/competition/:id/points","destination":"/api/simple-actions?path=api/simple/competition/:id/points"},
+    {"source":"/api/simple/competition/:id/clicks","destination":"/api/simple-actions?path=api/simple/competition/:id/clicks"},
     {"source":"/api/simple/competition/:id/destination","destination":"/api/simple-actions?path=api/simple/competition/:id/destination"}
   ]
 }
