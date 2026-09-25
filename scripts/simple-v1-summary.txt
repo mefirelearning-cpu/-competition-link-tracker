@@ -1,0 +1,1 @@
+Admin -> competition -> create participant link -> track clicks -> manual points -> public leaderboard.

@@ -1,0 +1,1 @@
+Public leaderboard displays competition identity, available cover image, prize text, rank, points and points needed to pass the participant immediately ahead.

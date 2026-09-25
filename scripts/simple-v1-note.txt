@@ -1,0 +1,1 @@
+Do not re-enable secondary modules before the initial competition launch is validated in production.

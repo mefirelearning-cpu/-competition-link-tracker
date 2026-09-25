@@ -1,0 +1,8 @@
+Post-deploy smoke test:
+1. Open /admin on mobile.
+2. Open a competition.
+3. Create a participant.
+4. Copy and open /r/<competition>/<code>.
+5. Confirm click count changes.
+6. Add points with a reason.
+7. Open /leaderboard/<competition> and confirm rank/points/gap display.

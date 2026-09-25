@@ -1,0 +1,15 @@
+name: Simple V1 check
+on:
+  pull_request:
+  push:
+    branches: [main, codex/simple-launch-v1]
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node scripts/check-simple-v1.mjs
+      - run: node scripts/check-simple-v1-root.mjs
