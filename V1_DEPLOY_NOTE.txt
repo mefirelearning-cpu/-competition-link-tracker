@@ -1,0 +1,1 @@
+Production target: simple mobile-first competition workflow. Legacy source retained for data compatibility; only minimal V1 routes exposed in vercel.json.
