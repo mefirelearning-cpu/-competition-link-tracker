@@ -6,10 +6,11 @@
     {"source":"/admin/login","destination":"/api/index?path=admin/login"},
     {"source":"/c/:id","destination":"/api/simple-admin?path=c/:id"},
     {"source":"/leaderboard/:id","destination":"/api/simple-leaderboard?path=leaderboard/:id"},
-    {"source":"/r/:id/:code","destination":"/api/index?path=r/:id/:code"},
+    {"source":"/r/:id/:code","destination":"/api/simple-redirect?path=r/:id/:code"},
     {"source":"/api/simple/competition/create","destination":"/api/simple-actions?path=api/simple/competition/create"},
     {"source":"/api/simple/competition/:id/add","destination":"/api/simple-actions?path=api/simple/competition/:id/add"},
     {"source":"/api/simple/competition/:id/bulk","destination":"/api/simple-actions?path=api/simple/competition/:id/bulk"},
-    {"source":"/api/simple/competition/:id/points","destination":"/api/simple-actions?path=api/simple/competition/:id/points"}
+    {"source":"/api/simple/competition/:id/points","destination":"/api/simple-actions?path=api/simple/competition/:id/points"},
+    {"source":"/api/simple/competition/:id/destination","destination":"/api/simple-actions?path=api/simple/competition/:id/destination"}
   ]
 }
