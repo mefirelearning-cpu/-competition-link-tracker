@@ -1,0 +1,11 @@
+V1 DE LANCEMENT
+
+Interface volontairement minimale :
+1. Admin choisit une compétition.
+2. Admin crée un participant et récupère son lien personnel.
+3. Les visites du lien personnel sont suivies par le tracker existant.
+4. Admin ajoute ou retire manuellement des points avec un motif.
+5. Un seul lien public affiche le classement.
+6. Le classement affiche la compétition, ses lots, les points et l'écart nécessaire pour dépasser la position précédente.
+
+Les modules campagnes, missions, espace participant, prospects, récompenses avancées, anti-fraude, statistiques avancées et cron ne font pas partie de l'interface V1 de lancement.
