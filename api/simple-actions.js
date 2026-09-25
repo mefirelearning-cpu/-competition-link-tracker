@@ -14,7 +14,15 @@ export default async function handler(req,res){
  if(req.method!=="POST"){res.statusCode=405;res.setHeader("Allow","POST");return res.end("Method not allowed");}
  if(!(await authorized(req))){res.statusCode=401;return res.end("Unauthorized");}
  if(raw==="api/simple/competition/create"){
-  try{const name=clean(req.body?.name).slice(0,100),destination=validUrl(req.body?.destination);if(!name)return go(res,"/admin?error="+encodeURIComponent("Nom de compétition requis"));if(!destination)return go(res,"/admin?error="+encodeURIComponent("Lien principal valide requis (https://...)"));const competitionId=id("cmp");let slug=(slugify(name)||"competition")+"-"+randomBytes(3).toString("hex");await query(`INSERT INTO competitions (id,slug,name,status,registrations_open,leaderboard_visible,settings) VALUES ($1,$2,$3,'active',true,true,$4::jsonb)`,[competitionId,slug,name,JSON.stringify({redirectUrl:destination})]);return go(res,"/c/"+encodeURIComponent(competitionId)+"?createdCompetition=1");}catch(e){console.error("create competition:",e);return go(res,"/admin?error="+encodeURIComponent("Création impossible"));}
+  try{
+   const name=clean(req.body?.name).slice(0,100),destination=validUrl(req.body?.destination),coverRaw=clean(req.body?.cover),cover=coverRaw?validUrl(coverRaw):"",prizes=clean(req.body?.prizes).slice(0,500);
+   if(!name)return go(res,"/admin?error="+encodeURIComponent("Nom de compétition requis"));
+   if(!destination)return go(res,"/admin?error="+encodeURIComponent("Lien principal valide requis (https://...)"));
+   if(coverRaw&&!cover)return go(res,"/admin?error="+encodeURIComponent("URL de photo invalide"));
+   const competitionId=id("cmp");let slug=(slugify(name)||"competition")+"-"+randomBytes(3).toString("hex");
+   await query(`INSERT INTO competitions (id,slug,name,cover_url,status,registrations_open,leaderboard_visible,settings) VALUES ($1,$2,$3,$4,'active',true,true,$5::jsonb)`,[competitionId,slug,name,cover||null,JSON.stringify({redirectUrl:destination,prizes:prizes||"Lots annoncés par l’organisateur"})]);
+   return go(res,"/c/"+encodeURIComponent(competitionId)+"?createdCompetition=1");
+  }catch(e){console.error("create competition:",e);return go(res,"/admin?error="+encodeURIComponent("Création impossible"));}
  }
  const m=raw.match(/^api\/simple\/competition\/([^/]+)\/(add|bulk|points|destination)$/);if(!m){res.statusCode=404;return res.end("Not found");}
  const competitionId=decodeURIComponent(m[1]),action=m[2],back="/c/"+encodeURIComponent(competitionId);
