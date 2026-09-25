@@ -12,7 +12,7 @@ export default async function handler(req,res){
   const destination=String(row.settings?.redirectUrl||"").trim();let u;try{u=new URL(destination);}catch{return send(res,503,"Le lien principal de cette compétition n’est pas encore configuré.");}if(!["http:","https:"].includes(u.protocol))return send(res,503,"Le lien principal de cette compétition est invalide.");
   const adminSession=await getAdminSession(req).catch(()=>null);
   const tracked=await trackReferralVisit({req,res,competitionId,referralCode,isAdmin:Boolean(adminSession),isSelf:false});
-  if(tracked?.stats){await query(`UPDATE competition_participants SET raw_clicks_cache=$3,unique_clicks_cache=$4,valid_clicks_cache=$5,total_points_cache=GREATEST(total_points_cache,$6) WHERE competition_id=$1 AND referral_code=$2`,[competitionId,referralCode,Number(tracked.stats.clicks||0),Number(tracked.stats.unique||0),Number(tracked.stats.valid||0),Number(tracked.stats.points||0)]).catch(()=>{});}
+  if(tracked?.stats){await query(`UPDATE competition_participants SET raw_clicks_cache=GREATEST(raw_clicks_cache,$3),unique_clicks_cache=GREATEST(unique_clicks_cache,$4),valid_clicks_cache=GREATEST(valid_clicks_cache,$5),total_points_cache=GREATEST(total_points_cache,$6) WHERE competition_id=$1 AND referral_code=$2`,[competitionId,referralCode,Number(tracked.stats.clicks||0),Number(tracked.stats.unique||0),Number(tracked.stats.valid||0),Number(tracked.stats.points||0)]).catch(()=>{});}
   res.statusCode=302;res.setHeader("Location",u.toString());res.setHeader("Cache-Control","no-store");res.end();
  }catch(e){console.error("simple-redirect:",e);return send(res,500,"Redirection temporairement indisponible.");}
 }
