@@ -1,5 +1,4 @@
 import { randomBytes } from "node:crypto";
-import { put } from "@vercel/blob";
 import { query, withTransaction } from "../lib/db.js";
 import { adminAuthConfigured, getAdminSession } from "../lib/admin-auth.js";
 import { syncTrackingCache, captureCompetitionRank } from "../lib/simple-sync.js";
@@ -51,26 +50,24 @@ export default async function handler(req,res){
    const {fields,file}=await parseCreateRequest(req),name=clean(fields.name).slice(0,100),destination=validUrl(fields.destination),prizes=clean(fields.prizes).slice(0,500);
    if(!name)return go(res,"/admin?error="+encodeURIComponent("Nom de compétition requis"));
    if(!destination)return go(res,"/admin?error="+encodeURIComponent("Lien principal valide requis (https://...)"));
-   let cover="";
+   let coverImage=null,coverMimeType=null;
    if(file&&typeof file!=="string"&&Number(file.size||0)>0){
     if(!["image/jpeg","image/png","image/webp"].includes(file.type))return go(res,"/admin?error="+encodeURIComponent("Photo invalide : JPG, PNG ou WebP uniquement"));
     if(file.size>8*1024*1024)return go(res,"/admin?error="+encodeURIComponent("Photo trop lourde (8 Mo maximum)"));
-    const ext=file.type==="image/png"?"png":file.type==="image/webp"?"webp":"jpg";
-    const blob=await put(`competitions/${Date.now()}-${randomBytes(5).toString("hex")}.${ext}`,file,{access:"public",addRandomSuffix:false});
-    cover=blob.url;
+    coverImage=Buffer.from(await file.arrayBuffer());
+    coverMimeType=file.type;
    }
    const competitionId=id("cmp"),slug=(slugify(name)||"competition")+"-"+randomBytes(3).toString("hex");
    await withTransaction(async client=>{
-    await client.query(`INSERT INTO competitions (id,slug,name,cover_url,status,registrations_open,leaderboard_visible,settings)
-                        VALUES ($1,$2,$3,$4,'active',true,true,$5::jsonb)`,[competitionId,slug,name,cover||null,JSON.stringify({redirectUrl:destination,prizes:prizes||"Lots annoncés par l’organisateur"})]);
+    await client.query(`INSERT INTO competitions (id,slug,name,cover_url,cover_image,cover_mime_type,status,registrations_open,leaderboard_visible,settings)
+                        VALUES ($1,$2,$3,NULL,$4,$5,'active',true,true,$6::jsonb)`,[competitionId,slug,name,coverImage,coverMimeType,JSON.stringify({redirectUrl:destination,prizes:prizes||"Lots annoncés par l’organisateur"})]);
     await ensureFivePointClickRule(competitionId,client);
    });
    await captureCompetitionRank(competitionId);
    return go(res,"/c/"+encodeURIComponent(competitionId)+"?createdCompetition=1");
   }catch(e){
    console.error("create competition:",e);
-   const msg=/blob|BLOB/i.test(String(e?.message||""))?"Stockage photo non configuré sur Vercel":"Création impossible";
-   return go(res,"/admin?error="+encodeURIComponent(msg));
+   return go(res,"/admin?error="+encodeURIComponent("Création impossible"));
   }
  }
 
