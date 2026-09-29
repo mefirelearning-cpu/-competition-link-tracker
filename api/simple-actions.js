@@ -117,30 +117,37 @@ export default async function handler(req,res){
    if(!Number.isFinite(requested)||requested===0||Math.abs(requested)>100000)return go(res,back+"?error="+encodeURIComponent("Nombre de clics invalide"));
    await ensureFivePointClickRule(competitionId);
    await withTransaction(async client=>{
-    const found=await client.query(`SELECT participant_id,raw_clicks_cache,total_points_cache
+    const found=await client.query(`SELECT participant_id,raw_clicks_cache,unique_clicks_cache,valid_clicks_cache,total_points_cache
                                     FROM competition_participants
                                     WHERE competition_id=$1 AND referral_code=$2 AND status='active'
                                     FOR UPDATE`,[competitionId,referral]);
     const row=found.rows[0];
     if(!row)throw Object.assign(new Error("Participant introuvable"),{publicMessage:"Participant introuvable"});
-    const before=Math.max(0,Number(row.raw_clicks_cache||0)),after=Math.max(0,before+requested),delta=after-before;
+    const rawBefore=Math.max(0,Number(row.raw_clicks_cache||0));
+    const uniqueBefore=Math.max(0,Number(row.unique_clicks_cache||0));
+    const validBefore=Math.max(0,Number(row.valid_clicks_cache||0));
+    const rawAfter=Math.max(0,rawBefore+requested);
+    const delta=rawAfter-rawBefore;
     if(delta===0)return;
-    const desiredPointsDelta=delta*CLICK_POINTS;
+    const uniqueAfter=Math.max(0,uniqueBefore+delta);
+    const validAfter=Math.max(0,validBefore+delta);
+    const distinctDelta=uniqueAfter-uniqueBefore;
+    const desiredPointsDelta=distinctDelta*CLICK_POINTS;
     const currentPoints=Math.max(0,Number(row.total_points_cache||0));
     const appliedPointsDelta=desiredPointsDelta<0?Math.max(desiredPointsDelta,-currentPoints):desiredPointsDelta;
     await client.query(`INSERT INTO point_transactions
       (id,competition_id,participant_id,type,base_points,multiplier,final_points,idempotency_key,description,created_by,metadata)
       VALUES ($1,$2,$3,'admin_adjustment',$4,1,$4,$5,$6,'admin',$7::jsonb)`,[
        id("pt"),competitionId,row.participant_id,appliedPointsDelta,id("clickop"),
-       `Ajustement manuel : ${delta>0?"+":""}${delta} clic(s) × ${CLICK_POINTS} pts`,
-       JSON.stringify({source:"manual_click_adjustment",clickDelta:delta,pointsPerClick:CLICK_POINTS,desiredPointsDelta,appliedPointsDelta})
+       `Ajustement manuel : ${distinctDelta>0?"+":""}${distinctDelta} personne(s) distincte(s) × ${CLICK_POINTS} pts`,
+       JSON.stringify({source:"manual_click_adjustment",clickDelta:delta,distinctDelta,pointsPerClick:CLICK_POINTS,desiredPointsDelta,appliedPointsDelta,rawBefore,rawAfter,uniqueBefore,uniqueAfter,validBefore,validAfter})
     ]);
     await client.query(`UPDATE competition_participants
                         SET raw_clicks_cache=$3,
-                            unique_clicks_cache=$3,
-                            valid_clicks_cache=$3,
-                            total_points_cache=total_points_cache+$4
-                        WHERE competition_id=$1 AND referral_code=$2`,[competitionId,referral,after,appliedPointsDelta]);
+                            unique_clicks_cache=$4,
+                            valid_clicks_cache=$5,
+                            total_points_cache=total_points_cache+$6
+                        WHERE competition_id=$1 AND referral_code=$2`,[competitionId,referral,rawAfter,uniqueAfter,validAfter,appliedPointsDelta]);
    });
    await syncTrackingCache(competitionId,referral);
    await captureCompetitionRank(competitionId);
