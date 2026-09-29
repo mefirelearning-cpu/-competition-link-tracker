@@ -71,7 +71,7 @@ export default async function handler(req,res){
   }
  }
 
- const m=raw.match(/^api\/simple\/competition\/([^/]+)\/(add|bulk|points|clicks|destination)$/);
+ const m=raw.match(/^api\/simple\/competition\/([^/]+)\/(add|bulk|points|clicks|destination|delete)$/);
  if(!m){res.statusCode=404;return res.end("Not found");}
  const competitionId=decodeURIComponent(m[1]),action=m[2],back="/c/"+encodeURIComponent(competitionId);
 
@@ -111,6 +111,27 @@ export default async function handler(req,res){
 
   const referral=clean(req.body?.code);
   if(!referral)return go(res,back+"?error="+encodeURIComponent("Participant introuvable"));
+
+  if(action==="delete"){
+   await withTransaction(async client=>{
+    const found=await client.query(`SELECT cp.id,cp.participant_id,p.pseudonym
+                                    FROM competition_participants cp
+                                    JOIN participants p ON p.id=cp.participant_id
+                                    WHERE cp.competition_id=$1 AND cp.referral_code=$2 AND cp.status='active'
+                                    FOR UPDATE OF cp`,[competitionId,referral]);
+    const row=found.rows[0];
+    if(!row)throw Object.assign(new Error("Participant introuvable"),{publicMessage:"Participant introuvable ou déjà supprimé"});
+    await client.query(`UPDATE competition_participants
+                        SET status='withdrawn',metadata=COALESCE(metadata,'{}'::jsonb)||jsonb_build_object('removedAt',NOW()::text,'removedBy','admin')
+                        WHERE id=$1`,[row.id]);
+    await client.query(`INSERT INTO admin_audit_logs (id,admin_id,action,entity_type,entity_id,description,metadata)
+                        VALUES ($1,'admin','participant_removed','competition_participant',$2,$3,$4::jsonb)`,[
+      id("audit"),row.id,`Participant ${row.pseudonym} retiré de la compétition`,JSON.stringify({competitionId,participantId:row.participant_id,referralCode:referral})
+    ]);
+   });
+   await captureCompetitionRank(competitionId);
+   return go(res,back+"?deleted=ok");
+  }
 
   if(action==="clicks"){
    const requested=Math.trunc(Number(req.body?.amount));
