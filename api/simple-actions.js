@@ -3,7 +3,7 @@ import { query, withTransaction } from "../lib/db.js";
 import { adminAuthConfigured, getAdminSession } from "../lib/admin-auth.js";
 import { syncTrackingCache, captureCompetitionRank } from "../lib/simple-sync.js";
 
-const CLICK_POINTS=5;
+const DEFAULT_CLICK_POINTS=5;
 const go=(res,url)=>{res.statusCode=303;res.setHeader("Location",url);res.end();};
 const clean=v=>String(v??"").trim();
 const id=(prefix)=>prefix+"_"+randomBytes(12).toString("hex");
@@ -19,17 +19,11 @@ async function addParticipant(client,competitionId,name,referral){
  await client.query(`INSERT INTO competition_participants (id,competition_id,participant_id,referral_code,status) VALUES ($1,$2,$3,$4,'active')`,[membershipId,competitionId,participantId,referral]);
 }
 
-async function ensureFivePointClickRule(competitionId,client=null){
+async function ensureDefaultClickRule(competitionId,client=null){
  const run=(text,params)=>client?client.query(text,params):query(text,params);
  await run(`INSERT INTO point_rules (id,competition_id,action_type,enabled,base_points,multiplier,daily_cap_points,settings)
             VALUES ('rule_simple_'||substr(md5($1),1,20),$1,'valid_click',TRUE,$2,1,NULL,'{"simpleMode":true}'::jsonb)
-            ON CONFLICT (competition_id,action_type) DO UPDATE SET
-              enabled=TRUE,
-              base_points=EXCLUDED.base_points,
-              multiplier=1,
-              daily_cap_points=NULL,
-              settings=COALESCE(point_rules.settings,'{}'::jsonb)||'{"simpleMode":true}'::jsonb,
-              updated_at=NOW()`,[competitionId,CLICK_POINTS]);
+            ON CONFLICT (competition_id,action_type) DO NOTHING`,[competitionId,DEFAULT_CLICK_POINTS]);
 }
 
 async function parseCreateRequest(req){
@@ -61,7 +55,7 @@ export default async function handler(req,res){
    await withTransaction(async client=>{
     await client.query(`INSERT INTO competitions (id,slug,name,cover_url,cover_image,cover_mime_type,status,registrations_open,leaderboard_visible,settings)
                         VALUES ($1,$2,$3,NULL,$4,$5,'active',true,true,$6::jsonb)`,[competitionId,slug,name,coverImage,coverMimeType,JSON.stringify({redirectUrl:destination,prizes:prizes||"Lots annoncés par l’organisateur"})]);
-    await ensureFivePointClickRule(competitionId,client);
+    await ensureDefaultClickRule(competitionId,client);
    });
    await captureCompetitionRank(competitionId);
    return go(res,"/c/"+encodeURIComponent(competitionId)+"?createdCompetition=1");
@@ -71,7 +65,7 @@ export default async function handler(req,res){
   }
  }
 
- const m=raw.match(/^api\/simple\/competition\/([^/]+)\/(add|bulk|points|clicks|destination|delete)$/);
+ const m=raw.match(/^api\/simple\/competition\/([^/]+)\/(add|bulk|points|clicks|destination|delete|click-value)$/);
  if(!m){res.statusCode=404;return res.end("Not found");}
  const competitionId=decodeURIComponent(m[1]),action=m[2],back="/c/"+encodeURIComponent(competitionId);
 
@@ -81,6 +75,24 @@ export default async function handler(req,res){
    if(!destination)return go(res,back+"?error="+encodeURIComponent("Lien de redirection invalide"));
    await query(`UPDATE competitions SET settings=COALESCE(settings,'{}'::jsonb)||jsonb_build_object('redirectUrl',$2::text),updated_at=NOW() WHERE id=$1`,[competitionId,destination]);
    return go(res,back+"?destination=ok");
+  }
+
+  if(action==="click-value"){
+   const points=Math.trunc(Number(req.body?.points));
+   if(!Number.isFinite(points)||points<0||points>100000)return go(res,back+"?error="+encodeURIComponent("Valeur par clic invalide"));
+   await withTransaction(async client=>{
+    await ensureDefaultClickRule(competitionId,client);
+    const before=await client.query(`SELECT base_points,multiplier,daily_cap_points FROM point_rules WHERE competition_id=$1 AND action_type='valid_click' LIMIT 1 FOR UPDATE`,[competitionId]);
+    await client.query(`UPDATE point_rules
+                        SET enabled=TRUE,base_points=$2,multiplier=1,daily_cap_points=NULL,
+                            settings=COALESCE(settings,'{}'::jsonb)||'{"simpleMode":true}'::jsonb,updated_at=NOW()
+                        WHERE competition_id=$1 AND action_type='valid_click'`,[competitionId,points]);
+    await client.query(`INSERT INTO admin_audit_logs (id,admin_id,action,entity_type,entity_id,description,metadata)
+                        VALUES ($1,'admin','click_value_updated','competition',$2,$3,$4::jsonb)`,[
+      id("audit"),competitionId,`Valeur d'une personne distincte modifiée à ${points} point(s)`,JSON.stringify({before:before.rows[0]||null,after:{basePoints:points,multiplier:1,dailyCapPoints:null}})
+    ]);
+   });
+   return go(res,back+"?clickValue=ok");
   }
 
   if(action==="add"){
@@ -136,7 +148,7 @@ export default async function handler(req,res){
   if(action==="clicks"){
    const requested=Math.trunc(Number(req.body?.amount));
    if(!Number.isFinite(requested)||requested===0||Math.abs(requested)>100000)return go(res,back+"?error="+encodeURIComponent("Nombre de clics invalide"));
-   await ensureFivePointClickRule(competitionId);
+   await ensureDefaultClickRule(competitionId);
    await withTransaction(async client=>{
     const found=await client.query(`SELECT participant_id,raw_clicks_cache,unique_clicks_cache,valid_clicks_cache,total_points_cache
                                     FROM competition_participants
@@ -144,6 +156,9 @@ export default async function handler(req,res){
                                     FOR UPDATE`,[competitionId,referral]);
     const row=found.rows[0];
     if(!row)throw Object.assign(new Error("Participant introuvable"),{publicMessage:"Participant introuvable"});
+    const ruleResult=await client.query(`SELECT base_points,multiplier FROM point_rules WHERE competition_id=$1 AND action_type='valid_click' LIMIT 1`,[competitionId]);
+    const rule=ruleResult.rows[0]||{};
+    const clickPoints=Math.max(0,Math.round(Number(rule.base_points||DEFAULT_CLICK_POINTS)*Number(rule.multiplier||1)));
     const rawBefore=Math.max(0,Number(row.raw_clicks_cache||0));
     const uniqueBefore=Math.max(0,Number(row.unique_clicks_cache||0));
     const validBefore=Math.max(0,Number(row.valid_clicks_cache||0));
@@ -153,15 +168,15 @@ export default async function handler(req,res){
     const uniqueAfter=Math.max(0,uniqueBefore+delta);
     const validAfter=Math.max(0,validBefore+delta);
     const distinctDelta=uniqueAfter-uniqueBefore;
-    const desiredPointsDelta=distinctDelta*CLICK_POINTS;
+    const desiredPointsDelta=distinctDelta*clickPoints;
     const currentPoints=Math.max(0,Number(row.total_points_cache||0));
     const appliedPointsDelta=desiredPointsDelta<0?Math.max(desiredPointsDelta,-currentPoints):desiredPointsDelta;
     await client.query(`INSERT INTO point_transactions
       (id,competition_id,participant_id,type,base_points,multiplier,final_points,idempotency_key,description,created_by,metadata)
       VALUES ($1,$2,$3,'admin_adjustment',$4,1,$4,$5,$6,'admin',$7::jsonb)`,[
        id("pt"),competitionId,row.participant_id,appliedPointsDelta,id("clickop"),
-       `Ajustement manuel : ${distinctDelta>0?"+":""}${distinctDelta} personne(s) distincte(s) × ${CLICK_POINTS} pts`,
-       JSON.stringify({source:"manual_click_adjustment",clickDelta:delta,distinctDelta,pointsPerClick:CLICK_POINTS,desiredPointsDelta,appliedPointsDelta,rawBefore,rawAfter,uniqueBefore,uniqueAfter,validBefore,validAfter})
+       `Ajustement manuel : ${distinctDelta>0?"+":""}${distinctDelta} personne(s) distincte(s) × ${clickPoints} pts`,
+       JSON.stringify({source:"manual_click_adjustment",clickDelta:delta,distinctDelta,pointsPerClick:clickPoints,desiredPointsDelta,appliedPointsDelta,rawBefore,rawAfter,uniqueBefore,uniqueAfter,validBefore,validAfter})
     ]);
     await client.query(`UPDATE competition_participants
                         SET raw_clicks_cache=$3,
