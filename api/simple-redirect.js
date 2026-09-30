@@ -40,7 +40,8 @@ export default async function handler(req,res){
    tracked=await trackReferralVisit({
     req,res,competitionId,referralCode,isAdmin:Boolean(adminSession),isSelf:false,
     clickPhaseVersion:Math.max(1,Math.trunc(Number(row.settings?.clickPhaseVersion)||1)),
-    clickPhaseStartedAt:String(row.settings?.clickPhaseStartedAt||"")
+    clickPhaseStartedAt:String(row.settings?.clickPhaseStartedAt||""),
+    clickPhaseKey:destination
    });
   }catch(trackError){
    console.error("simple-redirect-tracking:",trackError);
