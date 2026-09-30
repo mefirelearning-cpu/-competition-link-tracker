@@ -59,6 +59,10 @@
     {
       "source": "/api/simple/competition/:id/delete",
       "destination": "/api/simple-actions?path=api/simple/competition/:id/delete"
+    },
+    {
+      "source": "/api/simple/competition/:id/click-value",
+      "destination": "/api/simple-actions?path=api/simple/competition/:id/click-value"
     }
   ]
 }
