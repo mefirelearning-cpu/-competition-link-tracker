@@ -37,7 +37,11 @@ export default async function handler(req,res){
   const adminSession=await getAdminSession(req).catch(()=>null);
   let tracked=null;
   try{
-   tracked=await trackReferralVisit({req,res,competitionId,referralCode,isAdmin:Boolean(adminSession),isSelf:false});
+   tracked=await trackReferralVisit({
+    req,res,competitionId,referralCode,isAdmin:Boolean(adminSession),isSelf:false,
+    clickPhaseVersion:Math.max(1,Math.trunc(Number(row.settings?.clickPhaseVersion)||1)),
+    clickPhaseStartedAt:String(row.settings?.clickPhaseStartedAt||"")
+   });
   }catch(trackError){
    console.error("simple-redirect-tracking:",trackError);
   }
