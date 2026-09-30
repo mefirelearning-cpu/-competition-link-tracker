@@ -3,19 +3,13 @@ import { trackReferralVisit } from "../lib/referral-tracking.js";
 import { getAdminSession } from "../lib/admin-auth.js";
 import { syncTrackingCache, captureCompetitionRank } from "../lib/simple-sync.js";
 
-const CLICK_POINTS=5;
+const DEFAULT_CLICK_POINTS=5;
 const send=(res,status,msg)=>{res.statusCode=status;res.setHeader("Content-Type","text/plain; charset=utf-8");res.setHeader("Cache-Control","no-store");res.end(msg);};
 
-async function ensureFivePointClickRule(competitionId){
+async function ensureDefaultClickRule(competitionId){
  await query(`INSERT INTO point_rules (id,competition_id,action_type,enabled,base_points,multiplier,daily_cap_points,settings)
               VALUES ('rule_simple_'||substr(md5($1),1,20),$1,'valid_click',TRUE,$2,1,NULL,'{"simpleMode":true}'::jsonb)
-              ON CONFLICT (competition_id,action_type) DO UPDATE SET
-                enabled=TRUE,
-                base_points=EXCLUDED.base_points,
-                multiplier=1,
-                daily_cap_points=NULL,
-                settings=COALESCE(point_rules.settings,'{}'::jsonb)||'{"simpleMode":true}'::jsonb,
-                updated_at=NOW()`,[competitionId,CLICK_POINTS]);
+              ON CONFLICT (competition_id,action_type) DO NOTHING`,[competitionId,DEFAULT_CLICK_POINTS]);
 }
 
 export default async function handler(req,res){
@@ -39,7 +33,7 @@ export default async function handler(req,res){
   try{u=new URL(destination);}catch{return send(res,503,"Le lien principal de cette compétition n’est pas encore configuré.");}
   if(!["http:","https:"].includes(u.protocol))return send(res,503,"Le lien principal de cette compétition est invalide.");
 
-  await ensureFivePointClickRule(competitionId);
+  await ensureDefaultClickRule(competitionId);
   const adminSession=await getAdminSession(req).catch(()=>null);
   let tracked=null;
   try{
