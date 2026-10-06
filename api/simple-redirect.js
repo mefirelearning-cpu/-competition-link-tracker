@@ -1,5 +1,6 @@
+import { waitUntil } from "@vercel/functions";
 import { query } from "../lib/db.js";
-import { trackReferralVisit } from "../lib/referral-tracking.js";
+import { trackReferralVisit, getVisitorIdentity } from "../lib/referral-tracking.js";
 import { getAdminSession } from "../lib/admin-auth.js";
 import { syncTrackingCache, captureCompetitionRank } from "../lib/simple-sync.js";
 
@@ -33,33 +34,34 @@ export default async function handler(req,res){
   try{u=new URL(destination);}catch{return send(res,503,"Le lien principal de cette compétition n’est pas encore configuré.");}
   if(!["http:","https:"].includes(u.protocol))return send(res,503,"Le lien principal de cette compétition est invalide.");
 
-  await ensureDefaultClickRule(competitionId);
-  const adminSession=await getAdminSession(req).catch(()=>null);
-  let tracked=null;
-  try{
-   tracked=await trackReferralVisit({
-    req,res,competitionId,referralCode,isAdmin:Boolean(adminSession),isSelf:false,
-    clickPhaseVersion:Math.max(1,Math.trunc(Number(row.settings?.clickPhaseVersion)||1)),
-    clickPhaseStartedAt:String(row.settings?.clickPhaseStartedAt||""),
-    clickPhaseKey:destination
-   });
-  }catch(trackError){
-   console.error("simple-redirect-tracking:",trackError);
-  }
-
-  if(!adminSession&&tracked?.raw){
+  const visitorIdentity=getVisitorIdentity(req,res);
+  const trackingTask=(async()=>{
    try{
-    await query(`UPDATE competition_participants
-                 SET raw_clicks_cache=raw_clicks_cache+1,
-                     unique_clicks_cache=unique_clicks_cache+$3,
-                     valid_clicks_cache=valid_clicks_cache+$4
-                 WHERE competition_id=$1 AND referral_code=$2`,[competitionId,referralCode,tracked.isUnique?1:0,tracked.isValid?1:0]);
-    await syncTrackingCache(competitionId,referralCode);
-    await captureCompetitionRank(competitionId);
-   }catch(syncError){
-    console.error("simple-redirect-sync:",syncError);
+    await ensureDefaultClickRule(competitionId);
+    const adminSession=await getAdminSession(req).catch(()=>null);
+    const tracked=await trackReferralVisit({
+     req,res,competitionId,referralCode,isAdmin:Boolean(adminSession),isSelf:false,
+     clickPhaseVersion:Math.max(1,Math.trunc(Number(row.settings?.clickPhaseVersion)||1)),
+     clickPhaseStartedAt:String(row.settings?.clickPhaseStartedAt||""),
+     clickPhaseKey:destination,
+     visitorIdentity
+    });
+
+    if(!adminSession&&tracked?.raw){
+     await query(`UPDATE competition_participants
+                  SET raw_clicks_cache=raw_clicks_cache+1,
+                      unique_clicks_cache=unique_clicks_cache+$3,
+                      valid_clicks_cache=valid_clicks_cache+$4
+                  WHERE competition_id=$1 AND referral_code=$2`,[competitionId,referralCode,tracked.isUnique?1:0,tracked.isValid?1:0]);
+     await syncTrackingCache(competitionId,referralCode);
+     await captureCompetitionRank(competitionId);
+    }
+   }catch(trackError){
+    console.error("simple-redirect-background:",trackError);
    }
-  }
+  })();
+
+  waitUntil(trackingTask);
 
   res.statusCode=302;
   res.setHeader("Location",u.toString());
